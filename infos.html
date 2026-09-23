@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infos pratiques - Bibliothèque CE Ambarès</title>
+<style>
+  :root {
+    --primary: #2E5B8A;
+    --primary-dark: #1f3f60;
+    --bg: #eae3f5;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: var(--bg);
+    margin: 0;
+    padding: 0 16px 40px;
+    color: #222;
+  }
+  header {
+    padding: 20px 0 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  h1 {
+    font-size: 22px;
+    color: var(--primary-dark);
+    margin: 0;
+  }
+  .back-link {
+    font-size: 14px;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: bold;
+  }
+  .back-link:hover { text-decoration: underline; }
+
+  .section-card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin: 16px 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    max-width: 700px;
+  }
+  .section-card h2 {
+    font-size: 17px;
+    color: var(--primary-dark);
+    margin: 0 0 10px;
+  }
+  .section-card .content {
+    font-size: 15px;
+    line-height: 1.6;
+    white-space: pre-line; /* respecte les sauts de ligne saisis dans le Sheet */
+  }
+  .empty {
+    text-align: center;
+    color: #888;
+    padding: 40px 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ℹ️ Infos pratiques</h1>
+  <a class="back-link" href="catalogue.html">← Retour au catalogue</a>
+</header>
+
+<div id="content"></div>
+
+<script>
+  // ⚠️ Doit être la même URL que celle utilisée dans catalogue.html
+  var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzGtR_DyQPRuYKKRqVm-HeeS7trpO9GaOHrUdgcDo7-pY0eyzQ58_J6GLvHSXv_Ngep/exec';
+
+  fetch(APPS_SCRIPT_URL + '?action=infos')
+    .then(function(r) { return r.json(); })
+    .then(function(sections) {
+      var container = document.getElementById('content');
+      if (!sections.length) {
+        container.innerHTML = '<p class="empty">Aucune information disponible pour le moment.</p>';
+        return;
+      }
+      container.innerHTML = sections.map(function(s) {
+        return '<div class="section-card"><h2>' + escapeHtml(s.titre) + '</h2>' +
+               '<div class="content">' + escapeHtml(s.contenu) + '</div></div>';
+      }).join('');
+    })
+    .catch(function(err) {
+      document.getElementById('content').innerHTML =
+        '<p class="empty">Erreur de chargement : ' + err.message + '</p>';
+    });
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, function(c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+</script>
+</body>
+</html>
