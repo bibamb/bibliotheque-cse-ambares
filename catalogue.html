@@ -302,7 +302,7 @@
      ============================================================ -->
 <header>
   <h1>📚 Bibliothèque du CSE Ambarès</h1>
-  <div class="subtitle" id="counter">Chargement du catalogue...</div>
+  <div class="subtitle" id="counter">Chargement du catalogue... oui parfois c'est un peu long... mais bon ça va venir... patience patience... c'est parce qu'il y a plein de bouquins dispos! 📚😋 </div>
   <!-- Lien vers la nouvelle page infos.html (contacts, horaires, modalités) -->
   <div style="margin-top:8px">
     <a href="infos.html" style="font-size:13px;color:#609ffc;font-weight:bold;text-decoration:none">ℹ️ Infos pratiques</a>
@@ -393,10 +393,31 @@
   // Appelle l'API Apps Script, récupère la liste des livres ET l'ordre
   // de référence des tags en parallèle, puis déclenche l'affichage.
   // ============================================================
+  // Récupère du JSON à une URL, et réessaie automatiquement une fois en cas
+  // d'échec (Apps Script renvoie parfois une page HTML au lieu du JSON attendu,
+  // un comportement connu et intermittent des web apps Apps Script). Si le
+  // deuxième essai échoue aussi, l'erreur remonte normalement.
+  function fetchJsonRetry(url, tentative) {
+    tentative = tentative || 1;
+    return fetch(url)
+      .then(function(r) { return r.text(); })
+      .then(function(text) {
+        try {
+          return JSON.parse(text);
+        } catch (parseErr) {
+          if (tentative < 2) {
+            // petite pause avant de réessayer, laisse le temps au service de se stabiliser
+            return new Promise(function(resolve) { setTimeout(resolve, 800); })
+              .then(function() { return fetchJsonRetry(url, tentative + 1); });
+          }
+          throw parseErr;
+        }
+      });
+  }
+
   function loadCatalog() {
-    var catalogPromise = fetch(APPS_SCRIPT_URL + '?action=catalog').then(function(r) { return r.json(); });
-    var tagOrderPromise = fetch(APPS_SCRIPT_URL + '?action=tagorder')
-      .then(function(r) { return r.json(); })
+    var catalogPromise = fetchJsonRetry(APPS_SCRIPT_URL + '?action=catalog');
+    var tagOrderPromise = fetchJsonRetry(APPS_SCRIPT_URL + '?action=tagorder')
       .catch(function() { return []; }); // si ça échoue, tri alphabétique par défaut
 
     Promise.all([catalogPromise, tagOrderPromise])
