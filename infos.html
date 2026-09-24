@@ -6,8 +6,8 @@
 <title>Infos pratiques - Bibliothèque CSE Ambarès</title>
 <style>
   :root {
-    --primary: #cecece;
-    --primary-dark: #609ffc;
+    --primary: #2E5B8A;
+    --primary-dark: #1f3f60;
     --bg: #23004C;
     --card: #ffffff;
   }
@@ -50,7 +50,7 @@
   }
   .section-card h2 {
     font-size: 17px;
-    color: var(--bg);
+    color: var(--primary-dark);
     margin: 0 0 10px;
   }
   .section-card .content {
@@ -78,8 +78,26 @@
   // ⚠️ Doit être la même URL que celle utilisée dans catalogue.html
   var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBW5Dj7kWizjQFqB1w2AUbWceosclLvWO9gbIsgAub84RqKCgVU2ZY0EQu5Ps_koIvTg/exec';
 
-  fetch(APPS_SCRIPT_URL + '?action=infos')
-    .then(function(r) { return r.json(); })
+  // Récupère du JSON à une URL, et réessaie automatiquement une fois en cas
+  // d'échec (Apps Script renvoie parfois une page HTML au lieu du JSON attendu).
+  function fetchJsonRetry(url, tentative) {
+    tentative = tentative || 1;
+    return fetch(url)
+      .then(function(r) { return r.text(); })
+      .then(function(text) {
+        try {
+          return JSON.parse(text);
+        } catch (parseErr) {
+          if (tentative < 2) {
+            return new Promise(function(resolve) { setTimeout(resolve, 800); })
+              .then(function() { return fetchJsonRetry(url, tentative + 1); });
+          }
+          throw parseErr;
+        }
+      });
+  }
+
+  fetchJsonRetry(APPS_SCRIPT_URL + '?action=infos')
     .then(function(sections) {
       var container = document.getElementById('content');
       if (!sections.length) {
