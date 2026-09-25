@@ -39,7 +39,31 @@
     font-weight: bold;
   }
   .back-link:hover { text-decoration: underline; }
-
+ 
+  /* Spinner de chargement violet */
+  #spinner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .spinner-circle {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border: 4px solid rgba(166, 77, 255, 0.2);
+    border-top-color: #A64DFF;
+    border-radius: 50%;
+    animation: spin 0.85s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .spinner-text {
+    color: #cecece;
+    font-size: 13px;
+  }
+ 
   .section-card {
     background: var(--card);
     border-radius: 10px;
@@ -56,7 +80,7 @@
   .section-card .content {
     font-size: 15px;
     line-height: 1.6;
-    white-space: pre-line; /* respecte les sauts de ligne saisis dans le Sheet */
+    white-space: pre-line;
   }
   .empty {
     text-align: center;
@@ -66,20 +90,22 @@
 </style>
 </head>
 <body>
-
+ 
 <header>
   <h1>ℹ️ Infos pratiques</h1>
   <a class="back-link" href="catalogue.html">← Retour au catalogue</a>
 </header>
-
+ 
+<div id="spinner">
+  <div class="spinner-circle"></div>
+  <div class="spinner-text">Chargement en cours...</div>
+</div>
+ 
 <div id="content"></div>
-
+ 
 <script>
-  // ⚠️ Doit être la même URL que celle utilisée dans catalogue.html
   var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBW5Dj7kWizjQFqB1w2AUbWceosclLvWO9gbIsgAub84RqKCgVU2ZY0EQu5Ps_koIvTg/exec';
-
-  // Récupère du JSON à une URL, et réessaie automatiquement une fois en cas
-  // d'échec (Apps Script renvoie parfois une page HTML au lieu du JSON attendu).
+ 
   function fetchJsonRetry(url, tentative) {
     tentative = tentative || 1;
     return fetch(url)
@@ -96,9 +122,10 @@
         }
       });
   }
-
+ 
   fetchJsonRetry(APPS_SCRIPT_URL + '?action=infos')
     .then(function(sections) {
+      document.getElementById('spinner').style.display = 'none';
       var container = document.getElementById('content');
       if (!sections.length) {
         container.innerHTML = '<p class="empty">Aucune information disponible pour le moment.</p>';
@@ -110,10 +137,11 @@
       }).join('');
     })
     .catch(function(err) {
+      document.getElementById('spinner').style.display = 'none';
       document.getElementById('content').innerHTML =
         '<p class="empty">Erreur de chargement : ' + err.message + '</p>';
     });
-
+ 
   function escapeHtml(s) {
     return String(s || '').replace(/[&<>"']/g, function(c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
