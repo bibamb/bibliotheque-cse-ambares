@@ -5,26 +5,42 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bibliothèque CSE Ambarès</title>
 <style>
+  /* ============================================================
+     PALETTE DE COULEURS
+     Ce sont des "variables CSS" : on nomme une couleur une fois
+     ici, puis on l'utilise partout ailleurs avec var(--nom).
+     Avantage : changer une couleur ici la change PARTOUT dans
+     la page d'un coup, pas besoin de chercher dans tout le code.
+     ============================================================ */
   :root {
-    --primary: #2E5B8A;
-    --primary-dark: #1f3f60;
-    --bg: #23004C;
-    --card: #ffffff;
-    --ok: #2e8a4d;
-    --warn: #b8860b;
-    --busy: #c0392b;
+    --primary: #2E5B8A;       /* couleur principale : titres, accents */
+    --primary-dark: #1f3f60;  /* variante plus foncée du bleu principal */
+    --bg: #23004C;            /* couleur de fond de toute la page */
+    --card: #ffffff;          /* fond des cartes de livres (blanc) */
+    --ok: #2e8a4d;            /* vert : badge "Disponible" */
+    --warn: #b8860b;          /* orange/doré : badge "Réservé" */
+    --busy: #c0392b;          /* rouge : badge "Emprunté" */
   }
 
+  /* Astuce classique : on force tous les éléments à inclure leur
+     bordure/padding DANS leur largeur déclarée, plutôt que de
+     l'ajouter par-dessus. Ça évite des surprises de mise en page. */
   * { box-sizing: border-box; }
 
+  /* ============================================================
+     FOND DE PAGE ET TYPOGRAPHIE GÉNÉRALE
+     ============================================================ */
   body {
     font-family: Arial, Helvetica, sans-serif;
-    background: var(--bg);
+    background: var(--bg);   /* <- change juste --bg ci-dessus pour changer le fond */
     margin: 0;
-    padding: 0 16px 40px;
+    padding: 0 16px 40px;    /* espace autour du contenu (haut droite bas gauche) */
     color: #222;
   }
 
+  /* ============================================================
+     EN-TÊTE (titre + compteur de livres en dessous)
+     ============================================================ */
   header {
     padding: 20px 0 10px;
   }
@@ -34,29 +50,38 @@
     margin: 0 0 4px 0;
   }
   .subtitle {
+    /* Le petit texte sous le titre : "X ouvrages au catalogue..." */
     color: #cecece;
     font-size: 13px;
   }
 
+  /* ============================================================
+     BARRE DE RECHERCHE ET FILTRES (la boîte blanche en haut)
+     ============================================================ */
   .controls {
     background: var(--card);
-    border-radius: 10px;
+    border-radius: 10px;     /* coins arrondis */
     padding: 14px;
     margin: 16px 0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08); /* légère ombre portée */
+    display: flex;           /* aligne les éléments enfants en ligne */
+    flex-wrap: wrap;         /* ...et les fait retomber à la ligne si pas assez de place */
+    gap: 10px;                /* espace entre chaque élément */
   }
   .controls input[type=text] {
-    flex: 1 1 220px;
-    min-width: 0;
+    flex: 1 1 220px;         /* la barre de recherche prend toute la place restante */
+    min-width: 0;            /* empêche le contenu de forcer une largeur minimale plus grande */
     padding: 9px 10px;
     border: 1px solid #ccc;
     border-radius: 6px;
     font-size: 14px;
   }
   .controls select {
+    /* Style des 4 menus déroulants (Type / Genre / Auteur / Statut).
+       flex + min-width:0 + max-width:100% empêchent un nom d'auteur très
+       long de forcer le menu à déborder de l'écran sur mobile : par défaut,
+       un élément flex ne rétrécit jamais sous la largeur de son contenu
+       (min-width:auto implicite) sauf si on force min-width:0. */
     flex: 1 1 140px;
     min-width: 0;
     max-width: 100%;
@@ -73,38 +98,12 @@
     margin-bottom: 10px;
   }
 
-  /* Bouton d'ouverture du panneau tags (intégré dans .controls) */
-  .tag-toggle {
-    flex: 1 1 140px;
-    min-width: 0;
-    max-width: 100%;
-    padding: 9px 10px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 14px;
-    background: white;
-    cursor: pointer;
-    text-align: left;
-  }
-  .tag-toggle.has-active {
-    border-color: var(--primary);
-    color: var(--primary);
-    font-weight: bold;
-  }
-
-  /* Panneau déroulant des pastilles, sous la barre de filtres */
-  .tag-panel {
-    display: none;
-    background: var(--card);
-    border-radius: 0 0 10px 10px;
-    padding: 12px 14px;
-    margin: -12px 0 16px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  /* Rangée de pastilles de tags cliquables, sous la barre de recherche */
+  .tag-filters {
+    display: flex;
     flex-wrap: wrap;
     gap: 6px;
-  }
-  .tag-panel.open {
-    display: flex;
+    margin: -6px 0 16px;
   }
   .tag-pill {
     font-size: 12px;
@@ -122,34 +121,42 @@
     color: white;
   }
 
+  /* ============================================================
+     GRILLE DE LIVRES
+     "grid" = grille CSS : auto-fill place autant de colonnes que
+     possible, chacune faisant au moins 150px de large. C'est ce
+     qui fait que la grille s'adapte automatiquement à la taille
+     de l'écran (plus de colonnes sur un grand écran, moins sur mobile).
+     ============================================================ */
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 16px;
+    gap: 16px;                /* espace entre les cartes */
   }
 
+  /* Une "carte" = un livre affiché dans la grille */
   .card {
     background: var(--card);
     border-radius: 10px;
-    overflow: hidden;
+    overflow: hidden;          /* pour que l'image respecte les coins arrondis */
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    cursor: pointer;
-    transition: transform 0.15s;
+    cursor: pointer;           /* curseur "main" pour montrer que c'est cliquable */
+    transition: transform 0.15s; /* anime le déplacement au survol */
     display: flex;
-    flex-direction: column;
+    flex-direction: column;    /* image en haut, texte en dessous */
   }
   .card:hover {
-    transform: translateY(-2px);
+    transform: translateY(-2px); /* la carte "remonte" légèrement au survol */
   }
   .card img {
     width: 100%;
-    aspect-ratio: 2/3;
-    object-fit: cover;
-    background: #ddd;
+    aspect-ratio: 2/3;         /* proportions classiques d'une couverture de livre */
+    object-fit: cover;         /* recadre l'image plutôt que de la déformer */
+    background: #ddd;          /* couleur affichée si l'image ne charge pas encore */
   }
   .card-body {
     padding: 8px 10px 10px;
-    flex: 1;
+    flex: 1;                   /* prend toute la hauteur restante de la carte */
     display: flex;
     flex-direction: column;
   }
@@ -165,8 +172,9 @@
     margin: 0 0 6px;
   }
 
+  /* Les petites étiquettes colorées (Type / Statut) en bas de chaque carte */
   .badges {
-    margin-top: auto;
+    margin-top: auto;   /* pousse les badges tout en bas de la carte, même si le titre est court */
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
@@ -174,35 +182,32 @@
   .badge {
     font-size: 10px;
     padding: 2px 7px;
-    border-radius: 10px;
+    border-radius: 10px;  /* forme de "pilule" */
     font-weight: bold;
   }
   .badge.type { background: #e0e7f1; color: var(--primary-dark); }
+  /* Une classe différente selon le statut, ajoutée dynamiquement par le JavaScript
+     plus bas (fonction statutClass) : disponible / reserve / emprunte */
   .badge.statut.disponible { background: #e6f4ea; color: var(--ok); }
   .badge.statut.reserve    { background: #fff6e0; color: var(--warn); }
   .badge.statut.emprunte   { background: #fdecea; color: var(--busy); }
 
-  /* Indicateur de chargement supplémentaire */
-  #loadMoreSentinel {
-    height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #aaa;
-    font-size: 13px;
-    margin-top: 8px;
-  }
-
+  /* ============================================================
+     FICHE DÉTAIL (la fenêtre qui s'ouvre quand on clique un livre)
+     "overlay" = le fond sombre semi-transparent qui recouvre toute
+     la page ; "detail" = la boîte blanche affichée par-dessus.
+     ============================================================ */
   .overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 10;
+    display: none;        /* cachée par défaut */
+    position: fixed;      /* reste à l'écran même si on scrolle */
+    inset: 0;              /* raccourci pour top:0; right:0; bottom:0; left:0 */
+    background: rgba(0,0,0,0.5); /* noir à 50% de transparence */
+    z-index: 10;            /* s'affiche au-dessus du reste du contenu */
     align-items: center;
     justify-content: center;
     padding: 16px;
   }
+  /* Le JavaScript ajoute la classe "open" pour l'afficher (voir plus bas) */
   .overlay.open { display: flex; }
 
   .detail {
@@ -210,10 +215,10 @@
     border-radius: 12px;
     max-width: 480px;
     width: 100%;
-    max-height: 85vh;
-    overflow-y: auto;
+    max-height: 85vh;       /* ne dépasse jamais 85% de la hauteur d'écran */
+    overflow-y: auto;       /* barre de défilement si le résumé est long */
     padding: 20px;
-    position: relative;
+    position: relative;      /* nécessaire pour positionner le bouton de fermeture */
   }
   .detail .close {
     position: absolute;
@@ -227,7 +232,7 @@
   }
   .detail img {
     width: 140px;
-    float: left;
+    float: left;             /* le texte s'enroule autour de l'image */
     margin: 0 14px 10px 0;
     border-radius: 6px;
   }
@@ -239,18 +244,21 @@
   .detail .author { color: #666; margin: 0 0 8px; }
   .detail .meta { font-size: 13px; color: #555; margin: 4px 0; }
   .detail .resume {
-    clear: both;
+    clear: both;   /* annule le float de l'image pour que le résumé démarre en dessous */
     padding-top: 10px;
     font-size: 14px;
     line-height: 1.5;
   }
 
   .empty {
+    /* Message affiché quand la recherche/filtre ne donne aucun résultat */
     text-align: center;
     color: #888;
     padding: 40px 0;
   }
 
+  /* Bloc de réservation affiché dans la fiche détail, uniquement pour
+     les livres actuellement disponibles (voir openDetail plus bas) */
   .reserve-box {
     clear: both;
     margin-top: 14px;
@@ -284,66 +292,53 @@
   .reserve-msg.ok { color: var(--ok); }
   .reserve-msg.warn { color: var(--warn); }
   .reserve-msg.err { color: var(--busy); }
-
-  /* Bouton retour en haut */
-  #backToTop {
-    position: fixed;
-    bottom: 28px;
-    right: 20px;
-    z-index: 20;
-    background: var(--primary);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 46px;
-    height: 46px;
-    font-size: 22px;
-    line-height: 46px;
-    text-align: center;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-    opacity: 0;
-    transform: translateY(12px);
-    transition: opacity 0.25s, transform 0.25s;
-    pointer-events: none;
-  }
-  #backToTop.visible {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-  }
 </style>
 </head>
 <body>
 
+<!-- ============================================================
+     EN-TÊTE : titre de la page + compteur de livres, mis à jour
+     dynamiquement par le JavaScript (fonction render, plus bas).
+     ============================================================ -->
 <header>
   <h1>📚 Bibliothèque du CSE Ambarès</h1>
-  <div class="subtitle" id="counter">Chargement du catalogue...</div>
+  <div class="subtitle" id="counter">Chargement du catalogue... oui parfois c'est un peu long... mais bon ça va venir... patience patience... c'est parce qu'il y a plein de bouquins dispos! 📚😋 </div>
+  <!-- Lien vers la nouvelle page infos.html (contacts, horaires, modalités) -->
   <div style="margin-top:8px">
     <a href="infos.html" style="font-size:13px;color:#609ffc;font-weight:bold;text-decoration:none">ℹ️ Infos pratiques</a>
   </div>
 </header>
 
+<!-- ============================================================
+     BARRE DE RECHERCHE + FILTRES
+     Chaque champ a un "id" unique (search, filterType, etc.) qui
+     permet au JavaScript de le retrouver avec document.getElementById().
+     Les <option> des <select> sont vides ici : elles sont remplies
+     automatiquement par la fonction populateFilters() une fois que
+     les livres sont chargés (on ne connaît pas les genres/auteurs à l'avance).
+     ============================================================ -->
 <div class="controls">
   <input type="text" id="search" placeholder="Rechercher un titre ou un auteur...">
   <select id="filterType"><option value="">Tous les types</option></select>
   <select id="filterGenre"><option value="">Tous les genres</option></select>
   <select id="filterAuteur"><option value="">Tous les auteurs</option></select>
   <select id="filterStatut"><option value="">Tous les statuts</option></select>
-  <button class="tag-toggle" id="tagToggleBtn" onclick="toggleTagPanel()">🏷️ Tags</button>
 </div>
 
-<div id="tagFilters" class="tag-panel"></div>
+<!-- Rangée de pastilles de tags, remplie dynamiquement (voir populateFilters) -->
+<div id="tagFilters" class="tag-filters"></div>
 
+<!-- La grille de livres est vide au départ : le JavaScript la remplit
+     avec une carte par livre (fonction render). -->
 <div id="grid" class="grid"></div>
 <div id="emptyMsg" class="empty" style="display:none">Aucun livre ne correspond à ta recherche.</div>
 
-<!-- Sentinelle invisible : quand elle entre dans le viewport, on charge la tranche suivante -->
-<div id="loadMoreSentinel"></div>
-
-<!-- Bouton retour en haut, visible dès qu'on scrolle -->
-<button id="backToTop" title="Retour en haut" onclick="scrollToTop()">↑</button>
-
+<!-- ============================================================
+     FICHE DÉTAIL (cachée par défaut grâce à la classe CSS .overlay)
+     Le JavaScript remplit #detailContent avec les infos du livre
+     cliqué (fonction openDetail) et ajoute la classe "open" pour
+     l'afficher.
+     ============================================================ -->
 <div class="overlay" id="overlay">
   <div class="detail">
     <button class="close" onclick="closeDetail()">×</button>
@@ -352,50 +347,30 @@
 </div>
 
 <script>
+  // ============================================================
+  // CONFIGURATION
+  // ============================================================
+  // ⚠️ L'URL de ton application web Apps Script (se termine par /exec).
+  // C'est elle qui fournit les données du catalogue en JSON.
+  // Si tu redéploies un jour ton Apps Script en créant un NOUVEAU
+  // déploiement (pas juste "nouvelle version"), cette URL change
+  // et il faudra la remplacer ici.
   var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBW5Dj7kWizjQFqB1w2AUbWceosclLvWO9gbIsgAub84RqKCgVU2ZY0EQu5Ps_koIvTg/exec';
 
-  // Nombre de cartes affichées par tranche (chargement initial + chaque scroll)
-  var PAGE_SIZE = 300;
-
+  // Tableau qui contiendra TOUS les livres une fois chargés depuis le Sheet.
+  // On le garde en mémoire pour pouvoir filtrer/rechercher sans
+  // devoir redemander les données à chaque frappe au clavier.
   var allBooks = [];
+
+  // Ensemble des tags actuellement sélectionnés dans le filtre pastilles
   var selectedTags = new Set();
+
+  // Ordre de référence des tags, chargé depuis l'onglet Tags/Listes du Sheet
+  // (voir loadCatalog) — utilisé pour trier les pastilles autrement qu'alphabétiquement.
   var tagOrder = [];
 
-  // Liste filtrée courante et index de rendu
-  var currentFiltered = [];
-  var renderedCount = 0;
-
-  // IntersectionObserver : déclenche le rendu de la tranche suivante
-  // quand la sentinelle du bas devient visible.
-  var scrollObserver = new IntersectionObserver(function(entries) {
-    if (entries[0].isIntersecting) {
-      renderNextBatch();
-    }
-  }, { rootMargin: '200px' }); // déclenche 200px avant d'atteindre le bas
-  scrollObserver.observe(document.getElementById('loadMoreSentinel'));
-
-  // Ouvre / ferme le panneau de tags
-  function toggleTagPanel() {
-    var panel = document.getElementById('tagFilters');
-    panel.classList.toggle('open');
-    updateTagToggleLabel();
-  }
-
-  // Met à jour le libellé du bouton Tags selon la sélection en cours
-  function updateTagToggleLabel() {
-    var btn = document.getElementById('tagToggleBtn');
-    var panel = document.getElementById('tagFilters');
-    var isOpen = panel.classList.contains('open');
-    var count = selectedTags.size;
-    if (count > 0) {
-      btn.textContent = '🏷️ Tags (' + count + ') ' + (isOpen ? '▲' : '▼');
-      btn.classList.add('has-active');
-    } else {
-      btn.textContent = '🏷️ Tags ' + (isOpen ? '▲' : '▼');
-      btn.classList.remove('has-active');
-    }
-  }
-
+  // Découpe la chaîne "Tag1, Tag2, Tag3" (stockée dans le Sheet) en
+  // tableau ["Tag1","Tag2","Tag3"], en retirant les espaces superflus.
   function parseTags(tagString) {
     return (tagString || '')
       .split(',')
@@ -403,6 +378,8 @@
       .filter(Boolean);
   }
 
+  // Convertit le texte du statut ("Disponible", "Réservé"...) en un
+  // nom de classe CSS ("disponible", "reserve"...) utilisé pour la couleur du badge.
   function statutClass(s) {
     s = (s || '').toLowerCase();
     if (s.indexOf('dispo') === 0) return 'disponible';
@@ -411,6 +388,15 @@
     return '';
   }
 
+  // ============================================================
+  // CHARGEMENT DES DONNÉES
+  // Appelle l'API Apps Script, récupère la liste des livres ET l'ordre
+  // de référence des tags en parallèle, puis déclenche l'affichage.
+  // ============================================================
+  // Récupère du JSON à une URL, et réessaie automatiquement une fois en cas
+  // d'échec (Apps Script renvoie parfois une page HTML au lieu du JSON attendu,
+  // un comportement connu et intermittent des web apps Apps Script). Si le
+  // deuxième essai échoue aussi, l'erreur remonte normalement.
   function fetchJsonRetry(url, tentative) {
     tentative = tentative || 1;
     return fetch(url)
@@ -420,6 +406,7 @@
           return JSON.parse(text);
         } catch (parseErr) {
           if (tentative < 2) {
+            // petite pause avant de réessayer, laisse le temps au service de se stabiliser
             return new Promise(function(resolve) { setTimeout(resolve, 800); })
               .then(function() { return fetchJsonRetry(url, tentative + 1); });
           }
@@ -431,7 +418,7 @@
   function loadCatalog() {
     var catalogPromise = fetchJsonRetry(APPS_SCRIPT_URL + '?action=catalog');
     var tagOrderPromise = fetchJsonRetry(APPS_SCRIPT_URL + '?action=tagorder')
-      .catch(function() { return []; });
+      .catch(function() { return []; }); // si ça échoue, tri alphabétique par défaut
 
     Promise.all([catalogPromise, tagOrderPromise])
       .then(function(results) {
@@ -441,11 +428,16 @@
         render();
       })
       .catch(function(err) {
+        // Si la requête échoue (mauvaise URL, pas de réseau...), on affiche l'erreur
+        // à la place du compteur, pour pouvoir diagnostiquer facilement.
         document.getElementById('counter').innerText = 'Erreur de chargement : ' + err.message;
       });
   }
 
+  // Remplit dynamiquement les 4 menus déroulants avec les valeurs
+  // uniques trouvées dans les livres (pas besoin de les écrire à la main).
   function populateFilters(books) {
+    // new Set(...) élimine les doublons, .sort() trie par ordre alphabétique
     var types   = [...new Set(books.map(function(b){return b.type;}).filter(Boolean))].sort();
     var genres  = [...new Set(books.map(function(b){return b.genre;}).filter(Boolean))].sort();
     var auteurs = [...new Set(books.map(function(b){return b.auteur;}).filter(Boolean))].sort();
@@ -456,6 +448,9 @@
     fillSelect('filterAuteur', auteurs);
     fillSelect('filterStatut', statuts);
 
+    // Tags : on récupère tous les tags de tous les livres (uniques), puis on
+    // les trie selon tagOrder (ordre de l'onglet Tags/Listes) plutôt
+    // qu'alphabétiquement. Un tag absent de cette liste passe en dernier.
     var allTags = new Set();
     books.forEach(function(b) { parseTags(b.tags).forEach(function(t) { allTags.add(t); }); });
 
@@ -475,6 +470,7 @@
       pill.className = 'tag-pill';
       pill.textContent = tag;
       pill.onclick = function() {
+        // Clic sur une pastille : bascule sa sélection puis rafraîchit l'affichage
         if (selectedTags.has(tag)) {
           selectedTags.delete(tag);
           pill.classList.remove('active');
@@ -482,14 +478,13 @@
           selectedTags.add(tag);
           pill.classList.add('active');
         }
-        updateTagToggleLabel();
         render();
       };
       tagContainer.appendChild(pill);
     });
-    updateTagToggleLabel();
   }
 
+  // Ajoute une <option> par valeur dans le <select> désigné par son id.
   function fillSelect(id, values) {
     var sel = document.getElementById(id);
     values.forEach(function(v) {
@@ -501,27 +496,31 @@
   }
 
   // ============================================================
-  // AFFICHAGE PROGRESSIF
-  // render() calcule la liste filtrée complète, vide la grille
-  // et affiche la première tranche. renderNextBatch() est ensuite
-  // appelée automatiquement par l'IntersectionObserver à chaque
-  // fois que l'utilisateur approche du bas de la page.
+  // AFFICHAGE DE LA GRILLE
+  // Appelée à chaque changement de recherche/filtre (voir les
+  // écouteurs d'événements tout en bas du script).
   // ============================================================
   function render() {
+    // Lit la valeur actuelle de chaque champ de recherche/filtre
     var q = document.getElementById('search').value.trim().toLowerCase();
     var fType = document.getElementById('filterType').value;
     var fGenre = document.getElementById('filterGenre').value;
     var fAuteur = document.getElementById('filterAuteur').value;
     var fStatut = document.getElementById('filterStatut').value;
 
-    currentFiltered = allBooks.filter(function(b) {
+    // .filter() parcourt tous les livres et ne garde que ceux qui
+    // passent TOUS les critères actifs (type, genre, auteur, statut, recherche texte)
+    var filtered = allBooks.filter(function(b) {
       if (fType && b.type !== fType) return false;
       if (fGenre && b.genre !== fGenre) return false;
       if (fAuteur && b.auteur !== fAuteur) return false;
       if (fStatut && b.statut !== fStatut) return false;
+      // Tags : si des pastilles sont sélectionnées, on garde le livre s'il
+      // possède AU MOINS UN des tags cochés (logique "OU").
       if (selectedTags.size > 0) {
         var bookTags = parseTags(b.tags);
-        if (!bookTags.some(function(t) { return selectedTags.has(t); })) return false;
+        var hasOne = bookTags.some(function(t) { return selectedTags.has(t); });
+        if (!hasOne) return false;
       }
       if (q) {
         var hay = (b.titre + ' ' + b.auteur).toLowerCase();
@@ -530,67 +529,39 @@
       return true;
     });
 
-    // Réinitialise la grille pour la nouvelle recherche/filtre
-    renderedCount = 0;
-    document.getElementById('grid').innerHTML = '';
-    document.getElementById('emptyMsg').style.display = currentFiltered.length ? 'none' : 'block';
-
-    updateCounter();
-    renderNextBatch();
-  }
-
-  // Ajoute la tranche suivante de cartes dans la grille.
-  function renderNextBatch() {
-    if (renderedCount >= currentFiltered.length) {
-      document.getElementById('loadMoreSentinel').textContent = '';
-      return;
-    }
-
-    var end = Math.min(renderedCount + PAGE_SIZE, currentFiltered.length);
-    var grid = document.getElementById('grid');
-    var fragment = document.createDocumentFragment();
-
-    for (var i = renderedCount; i < end; i++) {
-      fragment.appendChild(createCard(currentFiltered[i]));
-    }
-    grid.appendChild(fragment);
-    renderedCount = end;
-
-    // Met à jour l'indicateur en bas de page
-    if (renderedCount < currentFiltered.length) {
-      document.getElementById('loadMoreSentinel').textContent =
-        'Chargement… (' + renderedCount + ' / ' + currentFiltered.length + ')';
-    } else {
-      document.getElementById('loadMoreSentinel').textContent = '';
-    }
-  }
-
-  function updateCounter() {
+    // Met à jour le petit texte sous le titre
     document.getElementById('counter').innerText =
-      allBooks.length + ' ouvrages au catalogue — ' + currentFiltered.length + ' affiché(s)';
-  }
+      allBooks.length + ' ouvrages au catalogue — ' + filtered.length + ' affiché(s)';
 
-  // Crée et renvoie l'élément DOM d'une carte livre.
-  function createCard(b) {
-    var card = document.createElement('div');
-    card.className = 'card';
-    card.onclick = function() { openDetail(b); };
-    card.innerHTML =
-      '<img src="' + (b.jaquette || '') + '" alt="" loading="lazy" onerror="this.style.opacity=0.3">' +
-      '<div class="card-body">' +
-        '<p class="card-title">' + escapeHtml(b.titre) + '</p>' +
-        '<p class="card-author">' + escapeHtml(b.auteur) + '</p>' +
-        '<div class="badges">' +
-          (b.type ? '<span class="badge type">' + escapeHtml(b.type) + '</span>' : '') +
-          (b.statut ? '<span class="badge statut ' + statutClass(b.statut) + '">' + escapeHtml(b.statut) + '</span>' : '') +
-        '</div>' +
-      '</div>';
-    return card;
+    // Vide la grille puis la reconstruit avec les livres filtrés.
+    // (Simple et fiable pour un catalogue de cette taille ; pas besoin
+    // d'optimisation plus poussée tant qu'on a quelques centaines de livres.)
+    var grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    document.getElementById('emptyMsg').style.display = filtered.length ? 'none' : 'block';
+
+    filtered.forEach(function(b) {
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.onclick = function() { openDetail(b); };  // ouvre la fiche détail au clic
+      card.innerHTML =
+        '<img src="' + (b.jaquette || '') + '" alt="" onerror="this.style.opacity=0.3">' +
+        '<div class="card-body">' +
+          '<p class="card-title">' + escapeHtml(b.titre) + '</p>' +
+          '<p class="card-author">' + escapeHtml(b.auteur) + '</p>' +
+          '<div class="badges">' +
+            (b.type ? '<span class="badge type">' + escapeHtml(b.type) + '</span>' : '') +
+            (b.statut ? '<span class="badge statut ' + statutClass(b.statut) + '">' + escapeHtml(b.statut) + '</span>' : '') +
+          '</div>' +
+        '</div>';
+      grid.appendChild(card);
+    });
   }
 
   // ============================================================
   // FICHE DÉTAIL
   // ============================================================
+  // Remplit et affiche la fenêtre de détail pour le livre "b" cliqué.
   function openDetail(b) {
     document.getElementById('detailContent').innerHTML =
       '<img src="' + (b.jaquette || '') + '" alt="">' +
@@ -608,6 +579,7 @@
       (!b.resume && !b.resumeComplet ? '<p class="resume">Pas de résumé disponible.</p>' : '') +
       '<div id="reserveZone"></div>';
 
+    // N'affiche le formulaire de réservation que si le livre est actuellement disponible
     if (statutClass(b.statut) === 'disponible') {
       document.getElementById('reserveZone').innerHTML =
         '<div class="reserve-box">' +
@@ -618,9 +590,11 @@
         '</div>';
     }
 
-    document.getElementById('overlay').classList.add('open');
+    document.getElementById('overlay').classList.add('open'); // rend la fiche visible (voir CSS .overlay.open)
   }
 
+  // Envoie la demande de réservation au backend (doPost côté Apps Script),
+  // qui vérifie que le livre est toujours disponible avant de l'enregistrer.
   function reserverLivre(isbn) {
     var nom = document.getElementById('resNom').value.trim();
     var statusDiv = document.getElementById('resStatus');
@@ -635,7 +609,7 @@
 
     fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // évite le pré-vol CORS
       body: JSON.stringify({ isbn: isbn, nom: nom })
     })
       .then(function(r) { return r.json(); })
@@ -643,7 +617,7 @@
         if (res.status === 'ok') {
           statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu recevras des nouvelles de la bibliothèque prochainement.</p>';
           document.getElementById('detailStatut').textContent = 'Réservé';
-          loadCatalog();
+          loadCatalog(); // rafraîchit la grille pour que le badge du livre se mette à jour
         } else if (res.status === 'unavailable') {
           statusDiv.innerHTML = '<p class="reserve-msg err">Ce livre vient d\'être réservé par quelqu\'un d\'autre entre-temps.</p>';
           loadCatalog();
@@ -662,35 +636,32 @@
     document.getElementById('overlay').classList.remove('open');
   }
 
+  // Convertit les caractères spéciaux (<, >, ", '...) en leur équivalent
+  // HTML sûr, pour éviter qu'un titre de livre contenant par exemple
+  // un symbole "<" ne casse l'affichage de la page.
   function escapeHtml(s) {
     return String(s || '').replace(/[&<>"']/g, function(c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
 
+  // ============================================================
+  // ÉCOUTEURS D'ÉVÉNEMENTS
+  // Chaque fois que l'utilisateur tape dans la recherche ou change
+  // un filtre, on relance render() pour rafraîchir l'affichage.
+  // ============================================================
   document.getElementById('search').addEventListener('input', render);
   document.getElementById('filterType').addEventListener('change', render);
   document.getElementById('filterGenre').addEventListener('change', render);
   document.getElementById('filterAuteur').addEventListener('change', render);
   document.getElementById('filterStatut').addEventListener('change', render);
+  // Ferme la fiche détail si on clique en dehors de la boîte blanche
+  // (c'est-à-dire directement sur le fond sombre "overlay").
   document.getElementById('overlay').addEventListener('click', function(e) {
     if (e.target === this) closeDetail();
   });
 
-  // Bouton retour en haut : apparaît après 400px de scroll
-  window.addEventListener('scroll', function() {
-    var btn = document.getElementById('backToTop');
-    if (window.scrollY > 400) {
-      btn.classList.add('visible');
-    } else {
-      btn.classList.remove('visible');
-    }
-  }, { passive: true });
-
-  function scrollToTop() {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
+  // Lance le chargement du catalogue dès que la page s'ouvre.
   loadCatalog();
 </script>
 </body>
