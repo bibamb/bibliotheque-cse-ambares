@@ -602,6 +602,7 @@
       (b.editeur ? '<p class="meta"><strong>Éditeur :</strong> ' + escapeHtml(b.editeur) + '</p>' : '') +
       (b.datePublication ? '<p class="meta"><strong>Publication :</strong> ' + escapeHtml(b.datePublication) + '</p>' : '') +
       (b.pages ? '<p class="meta"><strong>Pages :</strong> ' + escapeHtml(b.pages) + '</p>' : '') +
+      '<p class="meta"><strong>ISBN :</strong> ' + escapeHtml(b.isbn || '—') + '</p>' +      
       '<p class="meta"><strong>Statut :</strong> <span id="detailStatut">' + escapeHtml(b.statut || '—') + '</span></p>' +
       (b.resume ? '<p class="resume">' + escapeHtml(b.resume) + '</p>' : '') +
       (b.resumeComplet ? '<p class="resume"><strong>4e de couverture :</strong><br>' + escapeHtml(b.resumeComplet) + '</p>' : '') +
