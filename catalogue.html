@@ -179,9 +179,11 @@
   }
   .badge.type { background: #e0e7f1; color: var(--primary-dark); }
   .badge.statut.disponible { background: #e6f4ea; color: var(--ok); }
-  .badge.statut.reserve    { background: #fff6e0; color: var(--warn); }
+  .badge.statut.reserve    { background: ##454545; color: #dfabff; }
   .badge.statut.emprunte   { background: #fdecea; color: var(--busy); }
- 
+  .badge.statut.prochainement   { background: #23004C; color: #eae8eb; }
+  .badge.statut.wishlist   { background: #f0f007; color: #dfabff; }
+    
   /* Indicateur de chargement supplémentaire (scroll infini) */
   #loadMoreSentinel {
     height: 60px;
@@ -657,7 +659,7 @@
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.status === 'ok') {
-          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu recevras des nouvelles de la bibliothèque prochainement.</p>';
+          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu peux venir le chercher à la prochaine ouverture de la bibliothèque 📚🤓</p>';
           document.getElementById('detailStatut').textContent = 'Réservé';
           loadCatalog();
         } else if (res.status === 'unavailable') {
