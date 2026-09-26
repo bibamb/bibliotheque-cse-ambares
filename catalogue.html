@@ -179,10 +179,10 @@
   }
   .badge.type { background: #e0e7f1; color: var(--primary-dark); }
   .badge.statut.disponible { background: #e6f4ea; color: var(--ok); }
-  .badge.statut.reserve    { background: ##454545; color: #dfabff; }
+  .badge.statut.reserve    { background: #454545; color: #dfabff; }
   .badge.statut.emprunte   { background: #fdecea; color: var(--busy); }
   .badge.statut.prochainement   { background: #23004C; color: #eae8eb; }
-  .badge.statut.wishlist   { background: #f0f007; color: #dfabff; }
+  .badge.statut.wishlist   { background: #f0f007; color: #7A00E6; }
     
   /* Indicateur de chargement supplémentaire (scroll infini) */
   #loadMoreSentinel {
@@ -432,11 +432,17 @@
       .filter(Boolean);
   }
  
+  // Convertit le texte du statut en nom de classe CSS pour le badge.
+  // ⚠️ Chaque statut utilisé dans le Sheet DOIT avoir sa ligne ici, sinon
+  // aucune classe n'est attribuée et les couleurs définies en CSS
+  // (.badge.statut.xxx) ne s'appliquent jamais, même si elles existent.
   function statutClass(s) {
     s = (s || '').toLowerCase();
     if (s.indexOf('dispo') === 0) return 'disponible';
     if (s.indexOf('reserv') === 0) return 'reserve';
     if (s.indexOf('emprunt') === 0) return 'emprunte';
+    if (s.indexOf('wishlist') === 0) return 'wishlist';
+    if (s.indexOf('prochain') === 0) return 'prochainement';
     return '';
   }
  
