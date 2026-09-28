@@ -179,9 +179,11 @@
   }
   .badge.type { background: #e0e7f1; color: var(--primary-dark); }
   .badge.statut.disponible { background: #e6f4ea; color: var(--ok); }
-  .badge.statut.reserve    { background: #fff6e0; color: var(--warn); }
+  .badge.statut.reserve    { background: #e36110; color: #f5f5f5; }
   .badge.statut.emprunte   { background: #fdecea; color: var(--busy); }
- 
+  .badge.statut.prochainement   { background: #23004C; color: #eae8eb; }
+  .badge.statut.wishlist   { background: #f0f007; color: #7A00E6; }
+    
   /* Indicateur de chargement supplémentaire (scroll infini) */
   #loadMoreSentinel {
     height: 60px;
@@ -430,11 +432,21 @@
       .filter(Boolean);
   }
  
+  // Convertit le texte du statut en nom de classe CSS pour le badge.
+  // ⚠️ Chaque statut utilisé dans le Sheet DOIT avoir sa ligne ici, sinon
+  // aucune classe n'est attribuée et les couleurs définies en CSS
+  // (.badge.statut.xxx) ne s'appliquent jamais, même si elles existent.
+  // On retire aussi les accents (normalize + regex) : "Réservé" en minuscule
+  // donne "réservé", et 'réservé'.indexOf('reserv') échoue à cause du é
+  // accentué qui ne correspond jamais au e non-accentué recherché.
   function statutClass(s) {
     s = (s || '').toLowerCase();
+    s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // enlève les accents
     if (s.indexOf('dispo') === 0) return 'disponible';
     if (s.indexOf('reserv') === 0) return 'reserve';
     if (s.indexOf('emprunt') === 0) return 'emprunte';
+    if (s.indexOf('wishlist') === 0) return 'wishlist';
+    if (s.indexOf('prochain') === 0) return 'prochainement';
     return '';
   }
  
@@ -657,7 +669,7 @@
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.status === 'ok') {
-          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu recevras des nouvelles de la bibliothèque prochainement.</p>';
+          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu peux venir le chercher à la prochaine ouverture de la bibliothèque 📚🤓</p>';
           document.getElementById('detailStatut').textContent = 'Réservé';
           loadCatalog();
         } else if (res.status === 'unavailable') {
