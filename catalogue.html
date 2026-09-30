@@ -14,9 +14,9 @@
     --warn: #b8860b;
     --busy: #c0392b;
   }
- 
+
   * { box-sizing: border-box; }
- 
+
   body {
     font-family: Arial, Helvetica, sans-serif;
     background: var(--bg);
@@ -24,7 +24,7 @@
     padding: 0 16px 40px;
     color: #222;
   }
- 
+
   header {
     padding: 20px 0 10px;
   }
@@ -37,7 +37,7 @@
     color: #cecece;
     font-size: 13px;
   }
- 
+
   .controls {
     background: var(--card);
     border-radius: 10px;
@@ -66,13 +66,13 @@
     font-size: 14px;
     background: white;
   }
- 
+
   .count {
     font-size: 13px;
     color: #666;
     margin-bottom: 10px;
   }
- 
+
   /* Bouton d'ouverture du panneau tags (intégré dans .controls) */
   .tag-toggle {
     flex: 1 1 140px;
@@ -87,11 +87,11 @@
     text-align: left;
   }
   .tag-toggle.has-active {
-    border-color: #7A00E6;
-    color: #7A00E6;
+    border-color: var(--primary);
+    color: var(--primary);
     font-weight: bold;
   }
- 
+
   /* Panneau déroulant des pastilles, sous la barre de filtres */
   .tag-panel {
     display: none;
@@ -121,13 +121,13 @@
     border-color: var(--primary);
     color: white;
   }
- 
+
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 16px;
   }
- 
+
   .card {
     background: var(--card);
     border-radius: 10px;
@@ -164,7 +164,7 @@
     color: #666;
     margin: 0 0 6px;
   }
- 
+
   .badges {
     margin-top: auto;
     display: flex;
@@ -179,11 +179,9 @@
   }
   .badge.type { background: #e0e7f1; color: var(--primary-dark); }
   .badge.statut.disponible { background: #e6f4ea; color: var(--ok); }
-  .badge.statut.reserve    { background: #e36110; color: #f5f5f5; }
+  .badge.statut.reserve    { background: #fff6e0; color: var(--warn); }
   .badge.statut.emprunte   { background: #fdecea; color: var(--busy); }
-  .badge.statut.prochainement   { background: #23004C; color: #eae8eb; }
-  .badge.statut.wishlist   { background: #f0f007; color: #7A00E6; }
-    
+
   /* Indicateur de chargement supplémentaire (scroll infini) */
   #loadMoreSentinel {
     height: 60px;
@@ -194,7 +192,7 @@
     font-size: 13px;
     margin-top: 8px;
   }
- 
+
   .overlay {
     display: none;
     position: fixed;
@@ -206,7 +204,7 @@
     padding: 16px;
   }
   .overlay.open { display: flex; }
- 
+
   .detail {
     background: white;
     border-radius: 12px;
@@ -246,13 +244,13 @@
     font-size: 14px;
     line-height: 1.5;
   }
- 
+
   .empty {
     text-align: center;
     color: #888;
     padding: 40px 0;
   }
- 
+
   .reserve-box {
     clear: both;
     margin-top: 14px;
@@ -286,7 +284,7 @@
   .reserve-msg.ok { color: var(--ok); }
   .reserve-msg.warn { color: var(--warn); }
   .reserve-msg.err { color: var(--busy); }
- 
+
   /* Spinner de chargement violet */
   #spinner {
     margin: 10px 0 4px;
@@ -306,7 +304,7 @@
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
- 
+
   /* Bouton retour en haut */
   #backToTop {
     position: fixed;
@@ -337,7 +335,7 @@
 </style>
 </head>
 <body>
- 
+
 <header>
   <h1>📚 Bibliothèque du CSE Ambarès</h1>
   <div class="subtitle" id="counter"></div>
@@ -355,12 +353,11 @@
       désolé...<br>
       mais bon ça va venir...<br>
       patience patience...<br>
-      c'est parce qu'il y a plein de bouquins dispos...<br>
-      alors ça vaut le coup d'attendre ! 📚😊
+      c'est parce qu'il y a plein de bouquins dispos alors ça vaut le coup d'attendre ! 📚😊
     </div>
   </div>
 </header>
- 
+
 <div class="controls">
   <input type="text" id="search" placeholder="Rechercher un titre ou un auteur...">
   <select id="filterType"><option value="">Tous les types</option></select>
@@ -369,48 +366,52 @@
   <select id="filterStatut"><option value="">Tous les statuts</option></select>
   <button class="tag-toggle" id="tagToggleBtn" onclick="toggleTagPanel()">🏷️ Tags</button>
 </div>
- 
+
 <div id="tagFilters" class="tag-panel"></div>
- 
+
 <div id="grid" class="grid"></div>
 <div id="emptyMsg" class="empty" style="display:none">Aucun livre ne correspond à ta recherche.</div>
- 
+
 <div id="loadMoreSentinel"></div>
- 
+
 <button id="backToTop" title="Retour en haut" onclick="scrollToTop()">↑</button>
- 
+
 <div class="overlay" id="overlay">
   <div class="detail">
     <button class="close" onclick="closeDetail()">×</button>
     <div id="detailContent"></div>
   </div>
 </div>
- 
+
 <script>
   var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBW5Dj7kWizjQFqB1w2AUbWceosclLvWO9gbIsgAub84RqKCgVU2ZY0EQu5Ps_koIvTg/exec';
- 
+
   var PAGE_SIZE = 50;
- 
+
   var allBooks = [];
   var selectedTags = new Set();
   var tagOrder = [];
- 
+
   var currentFiltered = [];
   var renderedCount = 0;
- 
+
+  // ISBN du livre actuellement affiché dans la fiche détail
+  // (évite de mettre à jour la fiche si l'utilisateur en a ouvert une autre entre-temps)
+  var currentDetailIsbn = null;
+
   var scrollObserver = new IntersectionObserver(function(entries) {
     if (entries[0].isIntersecting) {
       renderNextBatch();
     }
   }, { rootMargin: '200px' });
   scrollObserver.observe(document.getElementById('loadMoreSentinel'));
- 
+
   function toggleTagPanel() {
     var panel = document.getElementById('tagFilters');
     panel.classList.toggle('open');
     updateTagToggleLabel();
   }
- 
+
   function updateTagToggleLabel() {
     var btn = document.getElementById('tagToggleBtn');
     var panel = document.getElementById('tagFilters');
@@ -424,32 +425,22 @@
       btn.classList.remove('has-active');
     }
   }
- 
+
   function parseTags(tagString) {
     return (tagString || '')
       .split(',')
       .map(function(t) { return t.trim(); })
       .filter(Boolean);
   }
- 
-  // Convertit le texte du statut en nom de classe CSS pour le badge.
-  // ⚠️ Chaque statut utilisé dans le Sheet DOIT avoir sa ligne ici, sinon
-  // aucune classe n'est attribuée et les couleurs définies en CSS
-  // (.badge.statut.xxx) ne s'appliquent jamais, même si elles existent.
-  // On retire aussi les accents (normalize + regex) : "Réservé" en minuscule
-  // donne "réservé", et 'réservé'.indexOf('reserv') échoue à cause du é
-  // accentué qui ne correspond jamais au e non-accentué recherché.
+
   function statutClass(s) {
     s = (s || '').toLowerCase();
-    s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // enlève les accents
     if (s.indexOf('dispo') === 0) return 'disponible';
     if (s.indexOf('reserv') === 0) return 'reserve';
     if (s.indexOf('emprunt') === 0) return 'emprunte';
-    if (s.indexOf('wishlist') === 0) return 'wishlist';
-    if (s.indexOf('prochain') === 0) return 'prochainement';
     return '';
   }
- 
+
   function fetchJsonRetry(url, tentative) {
     tentative = tentative || 1;
     return fetch(url)
@@ -466,12 +457,12 @@
         }
       });
   }
- 
+
   function loadCatalog() {
     var catalogPromise = fetchJsonRetry(APPS_SCRIPT_URL + '?action=catalog');
     var tagOrderPromise = fetchJsonRetry(APPS_SCRIPT_URL + '?action=tagorder')
       .catch(function() { return []; });
- 
+
     Promise.all([catalogPromise, tagOrderPromise])
       .then(function(results) {
         document.getElementById('spinner').style.display = 'none';
@@ -485,21 +476,21 @@
         document.getElementById('counter').innerText = 'Erreur de chargement : ' + err.message;
       });
   }
- 
+
   function populateFilters(books) {
     var types   = [...new Set(books.map(function(b){return b.type;}).filter(Boolean))].sort();
     var genres  = [...new Set(books.map(function(b){return b.genre;}).filter(Boolean))].sort();
     var auteurs = [...new Set(books.map(function(b){return b.auteur;}).filter(Boolean))].sort();
     var statuts = [...new Set(books.map(function(b){return b.statut;}).filter(Boolean))].sort();
- 
+
     fillSelect('filterType', types);
     fillSelect('filterGenre', genres);
     fillSelect('filterAuteur', auteurs);
     fillSelect('filterStatut', statuts);
- 
+
     var allTags = new Set();
     books.forEach(function(b) { parseTags(b.tags).forEach(function(t) { allTags.add(t); }); });
- 
+
     var sortedTags = [...allTags].sort(function(a, b) {
       var ia = tagOrder.indexOf(a);
       var ib = tagOrder.indexOf(b);
@@ -508,7 +499,7 @@
       if (ib === -1) return -1;
       return ia - ib;
     });
- 
+
     var tagContainer = document.getElementById('tagFilters');
     tagContainer.innerHTML = '';
     sortedTags.forEach(function(tag) {
@@ -530,7 +521,7 @@
     });
     updateTagToggleLabel();
   }
- 
+
   function fillSelect(id, values) {
     var sel = document.getElementById(id);
     values.forEach(function(v) {
@@ -540,14 +531,14 @@
       sel.appendChild(opt);
     });
   }
- 
+
   function render() {
     var q = document.getElementById('search').value.trim().toLowerCase();
     var fType = document.getElementById('filterType').value;
     var fGenre = document.getElementById('filterGenre').value;
     var fAuteur = document.getElementById('filterAuteur').value;
     var fStatut = document.getElementById('filterStatut').value;
- 
+
     currentFiltered = allBooks.filter(function(b) {
       if (fType && b.type !== fType) return false;
       if (fGenre && b.genre !== fGenre) return false;
@@ -563,31 +554,31 @@
       }
       return true;
     });
- 
+
     renderedCount = 0;
     document.getElementById('grid').innerHTML = '';
     document.getElementById('emptyMsg').style.display = currentFiltered.length ? 'none' : 'block';
- 
+
     updateCounter();
     renderNextBatch();
   }
- 
+
   function renderNextBatch() {
     if (renderedCount >= currentFiltered.length) {
       document.getElementById('loadMoreSentinel').textContent = '';
       return;
     }
- 
+
     var end = Math.min(renderedCount + PAGE_SIZE, currentFiltered.length);
     var grid = document.getElementById('grid');
     var fragment = document.createDocumentFragment();
- 
+
     for (var i = renderedCount; i < end; i++) {
       fragment.appendChild(createCard(currentFiltered[i]));
     }
     grid.appendChild(fragment);
     renderedCount = end;
- 
+
     if (renderedCount < currentFiltered.length) {
       document.getElementById('loadMoreSentinel').textContent =
         'Chargement… (' + renderedCount + ' / ' + currentFiltered.length + ')';
@@ -595,12 +586,12 @@
       document.getElementById('loadMoreSentinel').textContent = '';
     }
   }
- 
+
   function updateCounter() {
     document.getElementById('counter').innerText =
       allBooks.length + ' ouvrages au catalogue — ' + currentFiltered.length + ' affiché(s)';
   }
- 
+
   function createCard(b) {
     var card = document.createElement('div');
     card.className = 'card';
@@ -617,8 +608,11 @@
       '</div>';
     return card;
   }
- 
+
   function openDetail(b) {
+    currentDetailIsbn = b.isbn;
+
+    // Affiche immédiatement tout ce qu'on a (résumé court inclus)
     document.getElementById('detailContent').innerHTML =
       '<img src="' + (b.jaquette || '') + '" alt="">' +
       '<h2>' + escapeHtml(b.titre) + '</h2>' +
@@ -627,15 +621,14 @@
       '<p class="meta"><strong>Type :</strong> ' + escapeHtml(b.type || '—') + '</p>' +
       '<p class="meta"><strong>Genre :</strong> ' + escapeHtml(b.genre || '—') + '</p>' +
       (parseTags(b.tags).length ? '<p class="meta"><strong>Tags :</strong> ' + escapeHtml(parseTags(b.tags).join(', ')) + '</p>' : '') +
-      (b.editeur ? '<p class="meta"><strong>Éditeur :</strong> ' + escapeHtml(b.editeur) + '</p>' : '') +
-      (b.datePublication ? '<p class="meta"><strong>Publication :</strong> ' + escapeHtml(b.datePublication) + '</p>' : '') +
-      (b.pages ? '<p class="meta"><strong>Pages :</strong> ' + escapeHtml(b.pages) + '</p>' : '') +
+      '<p class="meta" id="detailEditeur" style="display:none"></p>' +
+      '<p class="meta" id="detailDate" style="display:none"></p>' +
+      '<p class="meta" id="detailPages" style="display:none"></p>' +
       '<p class="meta"><strong>Statut :</strong> <span id="detailStatut">' + escapeHtml(b.statut || '—') + '</span></p>' +
-      (b.resume ? '<p class="resume">' + escapeHtml(b.resume) + '</p>' : '') +
-      (b.resumeComplet ? '<p class="resume"><strong>4e de couverture :</strong><br>' + escapeHtml(b.resumeComplet) + '</p>' : '') +
-      (!b.resume && !b.resumeComplet ? '<p class="resume">Pas de résumé disponible.</p>' : '') +
+      '<div id="detailResume" class="resume">' + (b.resume ? escapeHtml(b.resume) : '') + '</div>' +
+      '<div id="detailResumeComplet" class="resume" style="color:#aaa;font-size:12px">Chargement...</div>' +
       '<div id="reserveZone"></div>';
- 
+
     if (statutClass(b.statut) === 'disponible') {
       document.getElementById('reserveZone').innerHTML =
         '<div class="reserve-box">' +
@@ -645,22 +638,66 @@
           '<div id="resStatus"></div>' +
         '</div>';
     }
- 
+
     document.getElementById('overlay').classList.add('open');
+
+    // Charge le détail complet en arrière-plan (résumé intégral + 4e de couverture + métadonnées)
+    fetchJsonRetry(APPS_SCRIPT_URL + '?action=bookdetail&isbn=' + encodeURIComponent(b.isbn))
+      .then(function(d) {
+        if (currentDetailIsbn !== b.isbn) return; // l'utilisateur a ouvert un autre livre
+        var resumeEl        = document.getElementById('detailResume');
+        var resumeCompletEl = document.getElementById('detailResumeComplet');
+        var editeurEl       = document.getElementById('detailEditeur');
+        var dateEl          = document.getElementById('detailDate');
+        var pagesEl         = document.getElementById('detailPages');
+
+        if (resumeEl && d.resume)
+          resumeEl.textContent = d.resume;
+
+        if (resumeCompletEl) {
+          if (d.resumeComplet) {
+            resumeCompletEl.style.color = '';
+            resumeCompletEl.style.fontSize = '';
+            resumeCompletEl.innerHTML = '<strong>4e de couverture :</strong><br>' + escapeHtml(d.resumeComplet);
+          } else {
+            resumeCompletEl.textContent = '';
+          }
+        }
+
+        if (editeurEl && d.editeur) {
+          editeurEl.innerHTML = '<strong>Éditeur :</strong> ' + escapeHtml(d.editeur);
+          editeurEl.style.display = '';
+        }
+        if (dateEl && d.datePublication) {
+          dateEl.innerHTML = '<strong>Publication :</strong> ' + escapeHtml(d.datePublication);
+          dateEl.style.display = '';
+        }
+        if (pagesEl && d.pages) {
+          pagesEl.innerHTML = '<strong>Pages :</strong> ' + escapeHtml(d.pages);
+          pagesEl.style.display = '';
+        }
+
+        if (resumeEl && !d.resume && !d.resumeComplet)
+          resumeEl.textContent = 'Pas de résumé disponible.';
+      })
+      .catch(function() {
+        var el = document.getElementById('detailResumeComplet');
+        if (el) el.textContent = '';
+      });
   }
- 
+
   function reserverLivre(isbn) {
     var nom = document.getElementById('resNom').value.trim();
     var statusDiv = document.getElementById('resStatus');
- 
+
     if (!nom) {
       statusDiv.innerHTML = '<p class="reserve-msg err">Merci de renseigner ton nom.</p>';
       return;
     }
- 
+
     document.getElementById('resBtn').disabled = true;
     statusDiv.innerHTML = '<p class="reserve-msg warn">Réservation en cours...</p>';
- 
+
     fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -669,7 +706,7 @@
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.status === 'ok') {
-          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu peux venir le chercher à la prochaine ouverture de la bibliothèque 📚🤓</p>';
+          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu recevras des nouvelles de la bibliothèque prochainement.</p>';
           document.getElementById('detailStatut').textContent = 'Réservé';
           loadCatalog();
         } else if (res.status === 'unavailable') {
@@ -685,17 +722,18 @@
         document.getElementById('resBtn').disabled = false;
       });
   }
- 
+
   function closeDetail() {
+    currentDetailIsbn = null;
     document.getElementById('overlay').classList.remove('open');
   }
- 
+
   function escapeHtml(s) {
     return String(s || '').replace(/[&<>"']/g, function(c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
- 
+
   document.getElementById('search').addEventListener('input', render);
   document.getElementById('filterType').addEventListener('change', render);
   document.getElementById('filterGenre').addEventListener('change', render);
@@ -704,7 +742,7 @@
   document.getElementById('overlay').addEventListener('click', function(e) {
     if (e.target === this) closeDetail();
   });
- 
+
   window.addEventListener('scroll', function() {
     var btn = document.getElementById('backToTop');
     if (window.scrollY > 400) {
@@ -713,11 +751,11 @@
       btn.classList.remove('visible');
     }
   }, { passive: true });
- 
+
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
- 
+
   loadCatalog();
 </script>
 </body>
