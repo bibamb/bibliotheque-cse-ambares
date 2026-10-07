@@ -467,120 +467,36 @@
       });
   }
  
-  // ── Chargement en 2 temps ──────────────────────────────────────────────────
-  // 1) Catalogue statique : affiché instantanément depuis le localStorage,
-  //    puis rafraîchi en arrière-plan.
-  // 2) Statuts : toujours lus en direct (appel léger), jamais mis en cache.
-  var CACHE_KEY = 'cse_catalog_v1';
-  var statutMap = {};
-  var statutsLoaded = false;
-  var currentBook = null;
-
-  function applyCatalog(books, tags) {
-    document.getElementById('spinner').style.display = 'none';
-    allBooks = books;
-    tagOrder = tags || [];
-    allBooks.forEach(function(b) { b.statut = statutMap[b.isbn] || ''; });
-    document.getElementById('filterType').length = 1;
-    document.getElementById('filterGenre').length = 1;
-    document.getElementById('filterAuteur').length = 1;
-    populateFilters(allBooks);
-    fillStatutFilter();
-    render();
-  }
-
   function loadCatalog() {
-    var cachedJson = null;
-    try { cachedJson = localStorage.getItem(CACHE_KEY); } catch (e) {}
-    if (cachedJson) {
-      try {
-        var c = JSON.parse(cachedJson);
-        if (c.books && c.books.length) applyCatalog(c.books, c.tagOrder);
-      } catch (e) { cachedJson = null; }
-    }
-
-    refreshStatuts();
-
     var catalogPromise = fetchJsonRetry(APPS_SCRIPT_URL + '?action=catalog');
     var tagOrderPromise = fetchJsonRetry(APPS_SCRIPT_URL + '?action=tagorder')
       .catch(function() { return []; });
-
+ 
     Promise.all([catalogPromise, tagOrderPromise])
       .then(function(results) {
-        var fresh = JSON.stringify({ books: results[0], tagOrder: results[1] || [] });
-        if (fresh === cachedJson) return; // rien n'a changé
-        try { localStorage.setItem(CACHE_KEY, fresh); } catch (e) {}
-        applyCatalog(results[0], results[1]);
+        document.getElementById('spinner').style.display = 'none';
+        allBooks = results[0];
+        tagOrder = results[1] || [];
+        populateFilters(allBooks);
+        render();
       })
       .catch(function(err) {
-        if (allBooks.length) return; // on garde l'affichage issu du cache
         document.getElementById('spinner').style.display = 'none';
         document.getElementById('counter').innerText = 'Erreur de chargement : ' + err.message;
       });
   }
-
-  function refreshStatuts() {
-    return fetchJsonRetry(APPS_SCRIPT_URL + '?action=statuts')
-      .then(function(map) {
-        statutMap = map || {};
-        statutsLoaded = true;
-        applyStatuts();
-      })
-      .catch(function() {});
-  }
-
-  function applyStatuts() {
-    allBooks.forEach(function(b) { b.statut = statutMap[b.isbn] || ''; });
-    fillStatutFilter();
-    document.querySelectorAll('[data-statut-isbn]').forEach(function(el) {
-      setBadge(el, statutMap[el.getAttribute('data-statut-isbn')]);
-    });
-    if (document.getElementById('filterStatut').value) render();
-    // Fiche ouverte avant l'arrivée des statuts : on affiche maintenant le bon état
-    if (currentBook && document.getElementById('overlay').classList.contains('open')
-        && !document.getElementById('resNom')) {
-      var st = document.getElementById('detailStatut');
-      if (st) st.textContent = currentBook.statut || '—';
-      renderReserveZone(currentBook);
-    }
-  }
-
-  function fillStatutFilter() {
-    var sel = document.getElementById('filterStatut');
-    var prev = sel.value;
-    sel.length = 1;
-    fillSelect('filterStatut', [...new Set(Object.values(statutMap).filter(Boolean))].sort());
-    sel.value = prev;
-  }
-
-  function setBadge(el, statut) {
-    if (!statutsLoaded) {
-      el.className = 'badge statut';
-      el.textContent = '…';
-      el.style.display = '';
-    } else if (statut) {
-      el.className = 'badge statut ' + statutClass(statut);
-      el.textContent = statut;
-      el.style.display = '';
-    } else {
-      el.style.display = 'none';
-    }
-  }
-
-  // Rafraîchit les statuts quand l'utilisateur revient sur l'onglet
-  document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) refreshStatuts();
-  });
-
+ 
   function populateFilters(books) {
     var types   = [...new Set(books.map(function(b){return b.type;}).filter(Boolean))].sort();
     var genres  = [...new Set(books.map(function(b){return b.genre;}).filter(Boolean))].sort();
     var auteurs = [...new Set(books.map(function(b){return b.auteur;}).filter(Boolean))].sort();
-
+    var statuts = [...new Set(books.map(function(b){return b.statut;}).filter(Boolean))].sort();
+ 
     fillSelect('filterType', types);
     fillSelect('filterGenre', genres);
     fillSelect('filterAuteur', auteurs);
-
+    fillSelect('filterStatut', statuts);
+ 
     var allTags = new Set();
     books.forEach(function(b) { parseTags(b.tags).forEach(function(t) { allTags.add(t); }); });
  
@@ -696,10 +612,9 @@
         '<p class="card-author">' + escapeHtml(b.auteur) + '</p>' +
         '<div class="badges">' +
           (b.type ? '<span class="badge type">' + escapeHtml(b.type) + '</span>' : '') +
-          '<span data-statut-isbn="' + escapeHtml(b.isbn) + '"></span>' +
+          (b.statut ? '<span class="badge statut ' + statutClass(b.statut) + '">' + escapeHtml(b.statut) + '</span>' : '') +
         '</div>' +
       '</div>';
-    setBadge(card.querySelector('[data-statut-isbn]'), b.statut);
     return card;
   }
  
@@ -715,32 +630,23 @@
       (b.editeur ? '<p class="meta"><strong>Éditeur :</strong> ' + escapeHtml(b.editeur) + '</p>' : '') +
       (b.datePublication ? '<p class="meta"><strong>Publication :</strong> ' + escapeHtml(b.datePublication) + '</p>' : '') +
       (b.pages ? '<p class="meta"><strong>Pages :</strong> ' + escapeHtml(b.pages) + '</p>' : '') +
-      '<p class="meta"><strong>Statut :</strong> <span id="detailStatut">' + (statutsLoaded ? escapeHtml(b.statut || '—') : '…') + '</span></p>' +
+      '<p class="meta"><strong>Statut :</strong> <span id="detailStatut">' + escapeHtml(b.statut || '—') + '</span></p>' +
       (b.resume ? '<p class="resume">' + escapeHtml(b.resume) + '</p>' : '') +
       (b.resumeComplet ? '<p class="resume"><strong>4e de couverture :</strong><br>' + escapeHtml(b.resumeComplet) + '</p>' : '') +
       (!b.resume && !b.resumeComplet ? '<p class="resume">Pas de résumé disponible.</p>' : '') +
       '<div id="reserveZone"></div>';
  
-    currentBook = b;
-    renderReserveZone(b);
-    document.getElementById('overlay').classList.add('open');
-  }
-
-  function renderReserveZone(b) {
-    var zone = document.getElementById('reserveZone');
-    if (!statutsLoaded) {
-      zone.innerHTML = '<p class="reserve-msg warn">Vérification de la disponibilité…</p>';
-    } else if (statutClass(b.statut) === 'disponible') {
-      zone.innerHTML =
+    if (statutClass(b.statut) === 'disponible') {
+      document.getElementById('reserveZone').innerHTML =
         '<div class="reserve-box">' +
           '<p class="reserve-title">Réserver ce livre</p>' +
           '<input type="text" id="resNom" placeholder="Votre nom">' +
           '<button id="resBtn" onclick="reserverLivre(\'' + b.isbn + '\')">Réserver</button>' +
           '<div id="resStatus"></div>' +
         '</div>';
-    } else {
-      zone.innerHTML = '';
     }
+ 
+    document.getElementById('overlay').classList.add('open');
   }
  
   function reserverLivre(isbn) {
@@ -765,11 +671,10 @@
         if (res.status === 'ok') {
           statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu peux venir le chercher à la prochaine ouverture de la bibliothèque 📚🤓</p>';
           document.getElementById('detailStatut').textContent = 'Réservé';
-          statutMap[isbn] = 'Réservé';
-          applyStatuts();
+          loadCatalog();
         } else if (res.status === 'unavailable') {
           statusDiv.innerHTML = '<p class="reserve-msg err">Ce livre vient d\'être réservé par quelqu\'un d\'autre entre-temps.</p>';
-          refreshStatuts();
+          loadCatalog();
         } else {
           statusDiv.innerHTML = '<p class="reserve-msg err">❌ ' + (res.message || 'Erreur inconnue.') + '</p>';
           document.getElementById('resBtn').disabled = false;
