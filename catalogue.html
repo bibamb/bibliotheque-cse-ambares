@@ -776,7 +776,7 @@
     if (statutClass(b.statut) === 'disponible') {
       document.getElementById('reserveZone').innerHTML =
         '<div class="reserve-box">' +
-          '<p class="reserve-title">Réserver ce livre</p>' +
+          '<p class="reserve-title">Réserver ce livre (3 max par personne)</p>' +
           '<input type="text" id="resNom" placeholder="Votre nom">' +
           '<button id="resBtn" onclick="reserverLivre(\'' + b.isbn + '\')">Réserver</button>' +
           '<div id="resStatus"></div>' +
