@@ -183,6 +183,8 @@
   .badge.statut.emprunte   { background: #fdecea; color: var(--busy); }
   .badge.statut.prochainement   { background: #23004C; color: #eae8eb; }
   .badge.statut.wishlist   { background: #f0f007; color: #7A00E6; }
+  .badge.statut.loading    { background: #eee; color: #888; animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
     
   /* Indicateur de chargement supplémentaire (scroll infini) */
   #loadMoreSentinel {
@@ -471,6 +473,8 @@
   var CACHE_KEY = 'cse_catalog_v2';
   var TAGS_KEY = 'cse_tagorder_v2';
   var statutsMap = null;      // { isbn: statut } reçu du serveur, jamais mis en cache
+  var statutsFailed = false;  // true si le chargement des statuts a échoué
+  var detailPending = false;  // fiche ouverte avant l'arrivée des statuts
   var catalogLoaded = false;
   var catalogRaw = '';
 
@@ -536,7 +540,11 @@
         mergeStatuts();
         if (catalogLoaded) applyStatutsToUi();
       })
-      .catch(function(err) { console.warn('Statuts indisponibles :', err); });
+      .catch(function(err) {
+        console.warn('Statuts indisponibles :', err);
+        statutsFailed = true;
+        if (catalogLoaded) applyStatutsToUi();
+      });
   }
 
   function mergeStatuts() {
@@ -547,13 +555,22 @@
   // Met à jour les badges de statut sans reconstruire la grille (la position de scroll est conservée)
   function applyStatutsToUi() {
     populateFilters(allBooks);
-    if (document.getElementById('filterStatut').value) { render(); return; }
     var byIsbn = {};
     allBooks.forEach(function(b) { byIsbn[b.isbn] = b; });
-    document.querySelectorAll('#grid .card').forEach(function(card) {
-      var b = byIsbn[card.dataset.isbn];
-      if (b) card.querySelector('.badges').innerHTML = badgesHtml(b);
-    });
+    if (document.getElementById('filterStatut').value) {
+      render();
+    } else {
+      document.querySelectorAll('#grid .card').forEach(function(card) {
+        var b = byIsbn[card.dataset.isbn];
+        if (b) card.querySelector('.badges').innerHTML = badgesHtml(b);
+      });
+    }
+    // Fiche ouverte avant l'arrivée des statuts : on la recharge (statut + bouton Réserver)
+    if (detailPending && currentDetailIsbn && byIsbn[currentDetailIsbn] &&
+        document.getElementById('overlay').classList.contains('open')) {
+      openDetail(byIsbn[currentDetailIsbn]);
+    }
+    detailPending = false;
   }
 
   function populateFilters(books) {
@@ -676,8 +693,10 @@
   }
  
   function badgesHtml(b) {
+    var statutLoading = !statutsMap && !statutsFailed;
     return (b.type ? '<span class="badge type">' + escapeHtml(b.type) + '</span>' : '') +
-           (b.statut ? '<span class="badge statut ' + statutClass(b.statut) + '">' + escapeHtml(b.statut) + '</span>' : '');
+           (statutLoading ? '<span class="badge statut loading">Statut…</span>' : '') +
+           (b.statut ?'<span class="badge statut ' + statutClass(b.statut) + '">' + escapeHtml(b.statut) + '</span>' : '');
   }
 
   function createCard(b) {
@@ -726,6 +745,7 @@
 
   function openDetail(b) {
     currentDetailIsbn = b.isbn;
+    detailPending = !statutsMap && !statutsFailed;
     document.getElementById('detailContent').innerHTML =
       '<img src="' + (b.jaquette || '') + '" alt="">' +
       '<h2>' + escapeHtml(b.titre) + '</h2>' +
@@ -735,7 +755,7 @@
       '<p class="meta"><strong>Genre :</strong> ' + escapeHtml(b.genre || '—') + '</p>' +
       (parseTags(b.tags).length ? '<p class="meta"><strong>Tags :</strong> ' + escapeHtml(parseTags(b.tags).join(', ')) + '</p>' : '') +
       '<div id="detailExtra"></div>' +
-      '<p class="meta"><strong>Statut :</strong> <span id="detailStatut">' + escapeHtml(b.statut || '—') + '</span></p>' +
+      '<p class="meta"><strong>Statut :</strong> <span id="detailStatut">' + escapeHtml(b.statut || (!statutsMap && !statutsFailed ? 'Chargement…' : '—')) + '</span></p>' +
       '<div id="detailResume"></div>' +
       '<div id="reserveZone"></div>';
 
@@ -756,7 +776,7 @@
     if (statutClass(b.statut) === 'disponible') {
       document.getElementById('reserveZone').innerHTML =
         '<div class="reserve-box">' +
-          '<p class="reserve-title">Réserver ce livre</p>' +
+          '<p class="reserve-title">Réserver ce livre (3 max par personne)</p>' +
           '<input type="text" id="resNom" placeholder="Votre nom">' +
           '<button id="resBtn" onclick="reserverLivre(\'' + b.isbn + '\')">Réserver</button>' +
           '<div id="resStatus"></div>' +
