@@ -1,3 +1,22 @@
+<!--
+  ============================================================================
+   PAGE CATALOGUE - Bibliothèque CSE Ambarès (version 2)
+  ============================================================================
+   Ce fichier est la page que voient les salariés. Il est hébergé sur GitHub.
+   Il contient 3 parties :
+     1. STYLE  (balise style)  : l'APPARENCE (couleurs, tailles, disposition)
+     2. PAGE   (balise body)   : la STRUCTURE (titre, filtres, grille, fiche détail)
+     3. SCRIPT (balise script) : le FONCTIONNEMENT (chargement, filtres, réservation)
+
+   La page ne contient AUCUN livre : elle les demande au script Google
+   (Code.gs) via l'adresse APPS_SCRIPT_URL, située au début de la partie SCRIPT.
+
+   NOUVEAUTÉ version 2 : le bouton "Réserver" n'apparaît que pour les livres
+   dont le statut est exactement "Disponible" (voir la fonction estDisponible).
+   Les colonnes Nom / Date du Sheet n'apparaissent pas ici : la page ne fait
+   qu'envoyer le nom saisi, et c'est Code.gs qui range tout dans le Sheet.
+  ============================================================================
+-->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -5,6 +24,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bibliothèque CSE Ambarès</title>
 <style>
+  /* ===== APPARENCE =====
+     Les couleurs principales sont définies une seule fois juste en dessous
+     (variables) : changer une valeur modifie toute la page. */
   :root {
     --primary: #2E5B8A;
     --primary-dark: #1f3f60;
@@ -15,8 +37,10 @@
     --busy: #c0392b;
   }
  
+  /* Fait en sorte que la largeur d'un élément inclue ses marges intérieures. */
   * { box-sizing: border-box; }
  
+  /* Fond de page, police et marges générales. */
   body {
     font-family: Arial, Helvetica, sans-serif;
     background: var(--bg);
@@ -25,6 +49,7 @@
     color: #222;
   }
  
+  /* Bandeau du haut : titre + compteur + lien "Infos pratiques". */
   header {
     padding: 20px 0 10px;
   }
@@ -38,6 +63,7 @@
     font-size: 13px;
   }
  
+  /* Barre de recherche et listes de filtres (Type, Genre, Auteur, Statut). */
   .controls {
     background: var(--card);
     border-radius: 10px;
@@ -122,12 +148,14 @@
     color: white;
   }
  
+  /* Grille de livres : autant de colonnes que la largeur de l'écran le permet. */
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 16px;
   }
  
+  /* Une "carte" = un livre dans la grille (jaquette, titre, auteur, pastilles). */
   .card {
     background: var(--card);
     border-radius: 10px;
@@ -165,6 +193,7 @@
     margin: 0 0 6px;
   }
  
+  /* Petites pastilles de couleur : Type (Livre/BD) et Statut. */
   .badges {
     margin-top: auto;
     display: flex;
@@ -178,6 +207,8 @@
     font-weight: bold;
   }
   .badge.type { background: #e0e7f1; color: var(--primary-dark); }
+  /* Couleur de la pastille selon le statut.
+     Pour changer une couleur : modifier "background" (fond) ou "color" (texte). */
   .badge.statut.disponible { background: #e6f4ea; color: var(--ok); }
   .badge.statut.reserve    { background: #e36110; color: #f5f5f5; }
   .badge.statut.emprunte   { background: #fdecea; color: var(--busy); }
@@ -197,6 +228,7 @@
     margin-top: 8px;
   }
  
+  /* Fiche détail : fond grisé + fenêtre blanche au centre quand on clique sur un livre. */
   .overlay {
     display: none;
     position: fixed;
@@ -255,6 +287,7 @@
     padding: 40px 0;
   }
  
+  /* Zone de réservation (nom + bouton), en bas de la fiche détail. */
   .reserve-box {
     clear: both;
     margin-top: 14px;
@@ -340,6 +373,9 @@
 </head>
 <body>
  
+<!-- ===== STRUCTURE DE LA PAGE ===== -->
+
+<!-- Bandeau du haut -->
 <header>
   <h1>📚 Bibliothèque du CSE Ambarès</h1>
   <div class="subtitle" id="counter"></div>
@@ -363,6 +399,8 @@
   </div>
 </header>
  
+<!-- Barre de recherche et filtres. Les listes sont remplies automatiquement
+     par le script avec les valeurs présentes dans le Sheet. -->
 <div class="controls">
   <input type="text" id="search" placeholder="Rechercher un titre ou un auteur...">
   <select id="filterType"><option value="">Tous les types</option></select>
@@ -374,6 +412,7 @@
  
 <div id="tagFilters" class="tag-panel"></div>
  
+<!-- Ici s'affichent les cartes des livres (créées par le script) -->
 <div id="grid" class="grid"></div>
 <div id="emptyMsg" class="empty" style="display:none">Aucun livre ne correspond à ta recherche.</div>
  
@@ -381,6 +420,7 @@
  
 <button id="backToTop" title="Retour en haut" onclick="scrollToTop()">↑</button>
  
+<!-- Fiche détail d'un livre (cachée tant qu'on ne clique pas sur un livre) -->
 <div class="overlay" id="overlay">
   <div class="detail">
     <button class="close" onclick="closeDetail()">×</button>
@@ -389,10 +429,23 @@
 </div>
  
 <script>
+  /* ===== FONCTIONNEMENT =====
+     Ordre des opérations au chargement de la page :
+       1. on affiche tout de suite les livres gardés en mémoire dans le navigateur (rapide)
+       2. on demande à Code.gs la liste à jour des livres
+       3. on demande en direct les statuts (Disponible, Réservé...)
+       4. on affiche / met à jour la grille
+  */
+
+  // Adresse du script Google (Code.gs déployé en application web).
+  // À modifier uniquement si vous redéployez le script avec une NOUVELLE adresse.
   var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBW5Dj7kWizjQFqB1w2AUbWceosclLvWO9gbIsgAub84RqKCgVU2ZY0EQu5Ps_koIvTg/exec';
  
+  // Nombre de livres ajoutés à l'écran à chaque fois qu'on descend dans la page.
   var PAGE_SIZE = 50;
  
+  // Variables de travail : tous les livres, tags cochés, ordre des tags,
+  // livres correspondant aux filtres actuels, nombre de cartes déjà affichées.
   var allBooks = [];
   var selectedTags = new Set();
   var tagOrder = [];
@@ -400,6 +453,7 @@
   var currentFiltered = [];
   var renderedCount = 0;
  
+  // Surveille le bas de la page : en s'en approchant, on affiche les 50 livres suivants.
   var scrollObserver = new IntersectionObserver(function(entries) {
     if (entries[0].isIntersecting) {
       renderNextBatch();
@@ -407,12 +461,14 @@
   }, { rootMargin: '200px' });
   scrollObserver.observe(document.getElementById('loadMoreSentinel'));
  
+  // Ouvre / ferme le panneau des tags.
   function toggleTagPanel() {
     var panel = document.getElementById('tagFilters');
     panel.classList.toggle('open');
     updateTagToggleLabel();
   }
  
+  // Met à jour le texte du bouton Tags (ex. "Tags (2) ▲" quand 2 tags sont cochés).
   function updateTagToggleLabel() {
     var btn = document.getElementById('tagToggleBtn');
     var panel = document.getElementById('tagFilters');
@@ -427,6 +483,7 @@
     }
   }
  
+  // Transforme "Saga, Classique" (texte du Sheet) en liste de tags séparés.
   function parseTags(tagString) {
     return (tagString || '')
       .split(',')
@@ -434,7 +491,7 @@
       .filter(Boolean);
   }
  
-  // Convertit le texte du statut en nom de classe CSS pour le badge.
+  // Convertit le texte du statut en nom de classe CSS pour la COULEUR de la pastille.
   // ⚠️ Chaque statut utilisé dans le Sheet DOIT avoir sa ligne ici, sinon
   // aucune classe n'est attribuée et les couleurs définies en CSS
   // (.badge.statut.xxx) ne s'appliquent jamais, même si elles existent.
@@ -452,6 +509,17 @@
     return '';
   }
  
+  // NOUVEAU (version 2) : le statut est-il EXACTEMENT "Disponible" ?
+  // C'est cette fonction qui décide si le bouton "Réserver" est proposé.
+  // (Réservé, Emprunté, Wishlist ou Prochainement donnent toujours "non".)
+  function estDisponible(statut) {
+    var s = (statut || '').trim().toLowerCase();
+    s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');   // enlève les accents
+    return s === 'disponible';
+  }
+
+  // Demande des données à Code.gs. Si Google répond par une page d'erreur au lieu
+  // des données (cela arrive parfois), on réessaie une fois automatiquement.
   function fetchJsonRetry(url, tentative) {
     tentative = tentative || 1;
     return fetch(url)
@@ -469,6 +537,7 @@
       });
   }
  
+  // Mémorisation dans le navigateur du visiteur (pour un affichage instantané).
   // ── Chargement : livres en cache navigateur, statuts toujours en direct ──
   var CACHE_KEY = 'cse_catalog_v2';
   var TAGS_KEY = 'cse_tagorder_v2';
@@ -478,9 +547,11 @@
   var catalogLoaded = false;
   var catalogRaw = '';
 
+  // Lecture / écriture dans la mémoire du navigateur (sans erreur si elle est bloquée).
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
+  // Chargement principal de la page (voir l'ordre des opérations en haut du script).
   function loadCatalog() {
     // 1) Affichage instantané depuis le cache du navigateur (livres + jaquettes, SANS statut)
     var cachedTags = lsGet(TAGS_KEY);
@@ -533,6 +604,8 @@
     loadStatuts();
   }
 
+  // Récupère les statuts en direct à chaque ouverture de la page. Ils ne sont jamais
+  // gardés en mémoire : une réservation faite par quelqu'un d'autre apparaît tout de suite.
   function loadStatuts() {
     return fetchJsonRetry(APPS_SCRIPT_URL + '?action=statuts')
       .then(function(map) {
@@ -547,6 +620,7 @@
       });
   }
 
+  // Associe à chaque livre son statut (grâce à l'ISBN).
   function mergeStatuts() {
     if (!statutsMap) return;
     allBooks.forEach(function(b) { b.statut = statutsMap[b.isbn] || ''; });
@@ -573,6 +647,7 @@
     detailPending = false;
   }
 
+  // Remplit les listes de filtres (Type, Genre, Auteur, Statut) et les pastilles de tags.
   function populateFilters(books) {
     var types   = [...new Set(books.map(function(b){return b.type;}).filter(Boolean))].sort();
     var genres  = [...new Set(books.map(function(b){return b.genre;}).filter(Boolean))].sort();
@@ -632,6 +707,7 @@
     sel.value = values.indexOf(current) > -1 ? current : '';
   }
  
+  // Applique les filtres + la recherche, puis réaffiche la grille depuis le début.
   function render() {
     var q = document.getElementById('search').value.trim().toLowerCase();
     var fType = document.getElementById('filterType').value;
@@ -663,6 +739,7 @@
     renderNextBatch();
   }
  
+  // Affiche les 50 livres suivants (défilement infini).
   function renderNextBatch() {
     if (renderedCount >= currentFiltered.length) {
       document.getElementById('loadMoreSentinel').textContent = '';
@@ -687,11 +764,13 @@
     }
   }
  
+  // Met à jour le texte "1300 ouvrages au catalogue — 120 affiché(s)".
   function updateCounter() {
     document.getElementById('counter').innerText =
       allBooks.length + ' ouvrages au catalogue — ' + currentFiltered.length + ' affiché(s)';
   }
  
+  // Fabrique les pastilles (Type + Statut) d'un livre.
   function badgesHtml(b) {
     var statutLoading = !statutsMap && !statutsFailed;
     return (b.type ? '<span class="badge type">' + escapeHtml(b.type) + '</span>' : '') +
@@ -699,6 +778,7 @@
            (b.statut ?'<span class="badge statut ' + statutClass(b.statut) + '">' + escapeHtml(b.statut) + '</span>' : '');
   }
 
+  // Fabrique la carte d'un livre dans la grille ; un clic ouvre la fiche détail.
   function createCard(b) {
     var card = document.createElement('div');
     card.className = 'card';
@@ -714,6 +794,7 @@
     return card;
   }
  
+  // Mémoire des détails déjà chargés (évite de les redemander si on rouvre le même livre).
   var detailCache = {};
   var currentDetailIsbn = null;
 
@@ -743,6 +824,7 @@
     res.innerHTML = html;
   }
 
+  // Ouvre la fiche détail d'un livre et décide si le bouton "Réserver" est proposé.
   function openDetail(b) {
     currentDetailIsbn = b.isbn;
     detailPending = !statutsMap && !statutsFailed;
@@ -773,7 +855,9 @@
         });
     }
 
-    if (statutClass(b.statut) === 'disponible') {
+    // RÈGLE : le formulaire de réservation n'existe QUE pour un livre "Disponible".
+    // Pour tout autre statut, la fiche s'affiche sans bouton Réserver.
+    if (estDisponible(b.statut)) {
       document.getElementById('reserveZone').innerHTML =
         '<div class="reserve-box">' +
           '<p class="reserve-title">Réserver ce livre (3 max par personne)</p>' +
@@ -786,6 +870,8 @@
     document.getElementById('overlay').classList.add('open');
   }
  
+  // Envoie la réservation à Code.gs (nom saisi + ISBN) puis affiche le résultat.
+  // Code.gs refait lui-même la vérification "Disponible" : deux sécurités valent mieux qu'une.
   function reserverLivre(isbn) {
     var nom = document.getElementById('resNom').value.trim();
     var statusDiv = document.getElementById('resStatus');
@@ -806,7 +892,7 @@
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.status === 'ok') {
-          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu peux venir le chercher à la prochaine ouverture de la bibliothèque 📚🤓</p>';
+          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Vous pouvez venir le chercher à la prochaine ouverture de la bibliothèque, ou bien contacter la section 📚🤓</p>';
           document.getElementById('detailStatut').textContent = 'Réservé';
           loadStatuts();
         } else if (res.status === 'unavailable') {
@@ -823,16 +909,21 @@
       });
   }
  
+  // Ferme la fiche détail.
   function closeDetail() {
     document.getElementById('overlay').classList.remove('open');
   }
  
+  // Neutralise les caractères spéciaux d'un texte avant de l'afficher
+  // (protection contre l'injection de code par un nom saisi).
   function escapeHtml(s) {
     return String(s || '').replace(/[&<>"']/g, function(c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
  
+  // Branchements : à chaque frappe dans la recherche ou changement de filtre,
+  // on réapplique les filtres. Un clic hors de la fiche la ferme.
   document.getElementById('search').addEventListener('input', render);
   document.getElementById('filterType').addEventListener('change', render);
   document.getElementById('filterGenre').addEventListener('change', render);
@@ -842,6 +933,7 @@
     if (e.target === this) closeDetail();
   });
  
+  // Affiche le bouton "↑" quand on a défilé de plus de 400 pixels.
   window.addEventListener('scroll', function() {
     var btn = document.getElementById('backToTop');
     if (window.scrollY > 400) {
@@ -851,10 +943,12 @@
     }
   }, { passive: true });
  
+  // Remonte en haut de la page en douceur.
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
  
+  // Démarrage : tout commence ici, au chargement de la page.
   loadCatalog();
 </script>
 </body>
