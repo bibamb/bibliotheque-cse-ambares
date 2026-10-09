@@ -812,8 +812,11 @@
       var resume = d.resume || b.resume;
       html =
         (resume ? '<p class="resume">' + escapeHtml(resume) + '</p>' : '') +
+        // NOUVEAU : bloc "Coup de Coeur" (texte de la colonne du Sheet), entre le résumé et la 4e de couverture.
+        // Il n'apparaît que si la cellule du Sheet contient du texte.
+        (d.coupDeCoeur ? '<p class="resume"><strong>💜 Coup de Coeur</strong><br>' + escapeHtml(d.coupDeCoeur) + '</p>' : '') +
         (d.resumeComplet ? '<p class="resume"><strong>4e de couverture :</strong><br>' + escapeHtml(d.resumeComplet) + '</p>' : '') +
-        (!resume && !d.resumeComplet ? '<p class="resume">Pas de résumé disponible.</p>' : '');
+        (!resume && !d.resumeComplet && !d.coupDeCoeur ? '<p class="resume">Pas de résumé disponible.</p>' : '');
     } else {
       html =
         (b.resume ? '<p class="resume">' + escapeHtml(b.resume) + '</p>' : '') +
@@ -892,7 +895,7 @@
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.status === 'ok') {
-          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Vous pouvez venir le chercher à la prochaine ouverture de la bibliothèque, ou bien contacter la section 📚🤓</p>';
+          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu peux venir le chercher à la prochaine ouverture de la bibliothèque 📚🤓</p>';
           document.getElementById('detailStatut').textContent = 'Réservé';
           loadStatuts();
         } else if (res.status === 'unavailable') {
