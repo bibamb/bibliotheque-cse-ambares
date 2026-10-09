@@ -183,6 +183,8 @@
   .badge.statut.emprunte   { background: #fdecea; color: var(--busy); }
   .badge.statut.prochainement   { background: #23004C; color: #eae8eb; }
   .badge.statut.wishlist   { background: #f0f007; color: #7A00E6; }
+  .badge.statut.loading    { background: #eee; color: #888; animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
     
   /* Indicateur de chargement supplémentaire (scroll infini) */
   #loadMoreSentinel {
@@ -467,39 +469,124 @@
       });
   }
  
+  // ── Chargement : livres en cache navigateur, statuts toujours en direct ──
+  var CACHE_KEY = 'cse_catalog_v2';
+  var TAGS_KEY = 'cse_tagorder_v2';
+  var statutsMap = null;      // { isbn: statut } reçu du serveur, jamais mis en cache
+  var statutsFailed = false;  // true si le chargement des statuts a échoué
+  var detailPending = false;  // fiche ouverte avant l'arrivée des statuts
+  var catalogLoaded = false;
+  var catalogRaw = '';
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
   function loadCatalog() {
-    var catalogPromise = fetchJsonRetry(APPS_SCRIPT_URL + '?action=catalog');
-    var tagOrderPromise = fetchJsonRetry(APPS_SCRIPT_URL + '?action=tagorder')
-      .catch(function() { return []; });
- 
-    Promise.all([catalogPromise, tagOrderPromise])
-      .then(function(results) {
+    // 1) Affichage instantané depuis le cache du navigateur (livres + jaquettes, SANS statut)
+    var cachedTags = lsGet(TAGS_KEY);
+    if (cachedTags) { try { tagOrder = JSON.parse(cachedTags) || []; } catch (e) {} }
+    var cachedBooks = lsGet(CACHE_KEY);
+    if (cachedBooks) {
+      try {
+        allBooks = JSON.parse(cachedBooks);
+        catalogRaw = cachedBooks;
+        catalogLoaded = true;
         document.getElementById('spinner').style.display = 'none';
-        allBooks = results[0];
-        tagOrder = results[1] || [];
+        populateFilters(allBooks);
+        render();
+      } catch (e) { allBooks = []; catalogLoaded = false; }
+    }
+
+    // 2) Livres à jour (cache serveur long). Ne ré-affiche que si le contenu a changé.
+    fetchJsonRetry(APPS_SCRIPT_URL + '?action=catalog')
+      .then(function(books) {
+        var raw = JSON.stringify(books);
+        document.getElementById('spinner').style.display = 'none';
+        if (catalogLoaded && raw === catalogRaw) return;
+        allBooks = books;
+        catalogRaw = raw;
+        catalogLoaded = true;
+        lsSet(CACHE_KEY, raw);
+        mergeStatuts();
         populateFilters(allBooks);
         render();
       })
       .catch(function(err) {
         document.getElementById('spinner').style.display = 'none';
-        document.getElementById('counter').innerText = 'Erreur de chargement : ' + err.message;
+        if (!catalogLoaded) {
+          document.getElementById('counter').innerText = 'Erreur de chargement : ' + err.message;
+        }
+      });
+
+    // 3) Ordre des tags : ne bloque plus l'affichage des cartes
+    fetchJsonRetry(APPS_SCRIPT_URL + '?action=tagorder')
+      .then(function(order) {
+        order = order || [];
+        if (JSON.stringify(order) === JSON.stringify(tagOrder)) return;
+        tagOrder = order;
+        lsSet(TAGS_KEY, JSON.stringify(order));
+        populateFilters(allBooks);
+      })
+      .catch(function() {});
+
+    // 4) Statuts / réservations : toujours en direct à chaque chargement de la page
+    loadStatuts();
+  }
+
+  function loadStatuts() {
+    return fetchJsonRetry(APPS_SCRIPT_URL + '?action=statuts')
+      .then(function(map) {
+        statutsMap = map || {};
+        mergeStatuts();
+        if (catalogLoaded) applyStatutsToUi();
+      })
+      .catch(function(err) {
+        console.warn('Statuts indisponibles :', err);
+        statutsFailed = true;
+        if (catalogLoaded) applyStatutsToUi();
       });
   }
- 
+
+  function mergeStatuts() {
+    if (!statutsMap) return;
+    allBooks.forEach(function(b) { b.statut = statutsMap[b.isbn] || ''; });
+  }
+
+  // Met à jour les badges de statut sans reconstruire la grille (la position de scroll est conservée)
+  function applyStatutsToUi() {
+    populateFilters(allBooks);
+    var byIsbn = {};
+    allBooks.forEach(function(b) { byIsbn[b.isbn] = b; });
+    if (document.getElementById('filterStatut').value) {
+      render();
+    } else {
+      document.querySelectorAll('#grid .card').forEach(function(card) {
+        var b = byIsbn[card.dataset.isbn];
+        if (b) card.querySelector('.badges').innerHTML = badgesHtml(b);
+      });
+    }
+    // Fiche ouverte avant l'arrivée des statuts : on la recharge (statut + bouton Réserver)
+    if (detailPending && currentDetailIsbn && byIsbn[currentDetailIsbn] &&
+        document.getElementById('overlay').classList.contains('open')) {
+      openDetail(byIsbn[currentDetailIsbn]);
+    }
+    detailPending = false;
+  }
+
   function populateFilters(books) {
     var types   = [...new Set(books.map(function(b){return b.type;}).filter(Boolean))].sort();
     var genres  = [...new Set(books.map(function(b){return b.genre;}).filter(Boolean))].sort();
     var auteurs = [...new Set(books.map(function(b){return b.auteur;}).filter(Boolean))].sort();
     var statuts = [...new Set(books.map(function(b){return b.statut;}).filter(Boolean))].sort();
- 
+
     fillSelect('filterType', types);
     fillSelect('filterGenre', genres);
     fillSelect('filterAuteur', auteurs);
     fillSelect('filterStatut', statuts);
- 
+
     var allTags = new Set();
     books.forEach(function(b) { parseTags(b.tags).forEach(function(t) { allTags.add(t); }); });
- 
+
     var sortedTags = [...allTags].sort(function(a, b) {
       var ia = tagOrder.indexOf(a);
       var ib = tagOrder.indexOf(b);
@@ -508,12 +595,12 @@
       if (ib === -1) return -1;
       return ia - ib;
     });
- 
+
     var tagContainer = document.getElementById('tagFilters');
     tagContainer.innerHTML = '';
     sortedTags.forEach(function(tag) {
       var pill = document.createElement('span');
-      pill.className = 'tag-pill';
+      pill.className = 'tag-pill' + (selectedTags.has(tag) ? ' active' : '');
       pill.textContent = tag;
       pill.onclick = function() {
         if (selectedTags.has(tag)) {
@@ -530,15 +617,19 @@
     });
     updateTagToggleLabel();
   }
- 
+
+  // Reconstruit les options en conservant la sélection en cours
   function fillSelect(id, values) {
     var sel = document.getElementById(id);
+    var current = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
     values.forEach(function(v) {
       var opt = document.createElement('option');
       opt.value = v;
       opt.textContent = v;
       sel.appendChild(opt);
     });
+    sel.value = values.indexOf(current) > -1 ? current : '';
   }
  
   function render() {
@@ -601,24 +692,60 @@
       allBooks.length + ' ouvrages au catalogue — ' + currentFiltered.length + ' affiché(s)';
   }
  
+  function badgesHtml(b) {
+    var statutLoading = !statutsMap && !statutsFailed;
+    return (b.type ? '<span class="badge type">' + escapeHtml(b.type) + '</span>' : '') +
+           (statutLoading ? '<span class="badge statut loading">Statut…</span>' : '') +
+           (b.statut ?'<span class="badge statut ' + statutClass(b.statut) + '">' + escapeHtml(b.statut) + '</span>' : '');
+  }
+
   function createCard(b) {
     var card = document.createElement('div');
     card.className = 'card';
+    card.dataset.isbn = b.isbn;
     card.onclick = function() { openDetail(b); };
     card.innerHTML =
       '<img src="' + (b.jaquette || '') + '" alt="" loading="lazy" onerror="this.style.opacity=0.3">' +
       '<div class="card-body">' +
         '<p class="card-title">' + escapeHtml(b.titre) + '</p>' +
         '<p class="card-author">' + escapeHtml(b.auteur) + '</p>' +
-        '<div class="badges">' +
-          (b.type ? '<span class="badge type">' + escapeHtml(b.type) + '</span>' : '') +
-          (b.statut ? '<span class="badge statut ' + statutClass(b.statut) + '">' + escapeHtml(b.statut) + '</span>' : '') +
-        '</div>' +
+        '<div class="badges">' + badgesHtml(b) + '</div>' +
       '</div>';
     return card;
   }
  
+  var detailCache = {};
+  var currentDetailIsbn = null;
+
+  // Remplit éditeur/pages/date et résumés. d = détail complet (null tant qu'il charge).
+  function fillDetail(b, d, failed) {
+    var extra = document.getElementById('detailExtra');
+    var res = document.getElementById('detailResume');
+    if (!extra || !res) return;
+    var html = '';
+    if (d) {
+      extra.innerHTML =
+        (d.editeur ? '<p class="meta"><strong>Éditeur :</strong> ' + escapeHtml(d.editeur) + '</p>' : '') +
+        (d.datePublication ? '<p class="meta"><strong>Publication :</strong> ' + escapeHtml(d.datePublication) + '</p>' : '') +
+        (d.pages ? '<p class="meta"><strong>Pages :</strong> ' + escapeHtml(d.pages) + '</p>' : '');
+      var resume = d.resume || b.resume;
+      html =
+        (resume ? '<p class="resume">' + escapeHtml(resume) + '</p>' : '') +
+        (d.resumeComplet ? '<p class="resume"><strong>4e de couverture :</strong><br>' + escapeHtml(d.resumeComplet) + '</p>' : '') +
+        (!resume && !d.resumeComplet ? '<p class="resume">Pas de résumé disponible.</p>' : '');
+    } else {
+      html =
+        (b.resume ? '<p class="resume">' + escapeHtml(b.resume) + '</p>' : '') +
+        (failed
+          ? (!b.resume ? '<p class="resume">Pas de résumé disponible.</p>' : '')
+          : '<p class="resume" style="color:#999;padding-top:4px">Chargement du détail…</p>');
+    }
+    res.innerHTML = html;
+  }
+
   function openDetail(b) {
+    currentDetailIsbn = b.isbn;
+    detailPending = !statutsMap && !statutsFailed;
     document.getElementById('detailContent').innerHTML =
       '<img src="' + (b.jaquette || '') + '" alt="">' +
       '<h2>' + escapeHtml(b.titre) + '</h2>' +
@@ -627,25 +754,35 @@
       '<p class="meta"><strong>Type :</strong> ' + escapeHtml(b.type || '—') + '</p>' +
       '<p class="meta"><strong>Genre :</strong> ' + escapeHtml(b.genre || '—') + '</p>' +
       (parseTags(b.tags).length ? '<p class="meta"><strong>Tags :</strong> ' + escapeHtml(parseTags(b.tags).join(', ')) + '</p>' : '') +
-      (b.editeur ? '<p class="meta"><strong>Éditeur :</strong> ' + escapeHtml(b.editeur) + '</p>' : '') +
-      (b.datePublication ? '<p class="meta"><strong>Publication :</strong> ' + escapeHtml(b.datePublication) + '</p>' : '') +
-      (b.pages ? '<p class="meta"><strong>Pages :</strong> ' + escapeHtml(b.pages) + '</p>' : '') +
-      '<p class="meta"><strong>Statut :</strong> <span id="detailStatut">' + escapeHtml(b.statut || '—') + '</span></p>' +
-      (b.resume ? '<p class="resume">' + escapeHtml(b.resume) + '</p>' : '') +
-      (b.resumeComplet ? '<p class="resume"><strong>4e de couverture :</strong><br>' + escapeHtml(b.resumeComplet) + '</p>' : '') +
-      (!b.resume && !b.resumeComplet ? '<p class="resume">Pas de résumé disponible.</p>' : '') +
+      '<div id="detailExtra"></div>' +
+      '<p class="meta"><strong>Statut :</strong> <span id="detailStatut">' + escapeHtml(b.statut || (!statutsMap && !statutsFailed ? 'Chargement…' : '—')) + '</span></p>' +
+      '<div id="detailResume"></div>' +
       '<div id="reserveZone"></div>';
- 
+
+    fillDetail(b, detailCache[b.isbn] || null);
+
+    // Détail complet (résumé intégral, 4e de couverture, éditeur, pages, date) chargé à la demande
+    if (!detailCache[b.isbn]) {
+      fetchJsonRetry(APPS_SCRIPT_URL + '?action=bookdetail&isbn=' + encodeURIComponent(b.isbn))
+        .then(function(d) {
+          detailCache[b.isbn] = d || {};
+          if (currentDetailIsbn === b.isbn) fillDetail(b, detailCache[b.isbn]);
+        })
+        .catch(function() {
+          if (currentDetailIsbn === b.isbn) fillDetail(b, null, true);
+        });
+    }
+
     if (statutClass(b.statut) === 'disponible') {
       document.getElementById('reserveZone').innerHTML =
         '<div class="reserve-box">' +
-          '<p class="reserve-title">Réserver ce livre</p>' +
+          '<p class="reserve-title">Réserver ce livre (3 max par personne)</p>' +
           '<input type="text" id="resNom" placeholder="Votre nom">' +
           '<button id="resBtn" onclick="reserverLivre(\'' + b.isbn + '\')">Réserver</button>' +
           '<div id="resStatus"></div>' +
         '</div>';
     }
- 
+
     document.getElementById('overlay').classList.add('open');
   }
  
@@ -671,10 +808,10 @@
         if (res.status === 'ok') {
           statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Réservé ! Tu peux venir le chercher à la prochaine ouverture de la bibliothèque 📚🤓</p>';
           document.getElementById('detailStatut').textContent = 'Réservé';
-          loadCatalog();
+          loadStatuts();
         } else if (res.status === 'unavailable') {
           statusDiv.innerHTML = '<p class="reserve-msg err">Ce livre vient d\'être réservé par quelqu\'un d\'autre entre-temps.</p>';
-          loadCatalog();
+          loadStatuts();
         } else {
           statusDiv.innerHTML = '<p class="reserve-msg err">❌ ' + (res.message || 'Erreur inconnue.') + '</p>';
           document.getElementById('resBtn').disabled = false;
