@@ -188,9 +188,13 @@
     line-height: 1.3;
     margin: 0 0 2px;
   }
-  /* Note et nombre de votes sous l'auteur (vide tant que le livre n'a pas de vote). */
-  .card-note { font-size: 12px; margin: 2px 0 4px; color: #555; }
+  /* Note et nombre de votes (vide tant que le livre n'a pas de vote).
+     "margin-top: auto" pousse la note vers le bas de la carte, juste au-dessus des pastilles
+     Type/Statut : l'espace libre (titre sur 1 ou 2 lignes) se place donc AVANT la note. */
+  .card-note { font-size: 12px; margin: auto 0 4px; color: #555; }
   .card-note:empty { display: none; }
+  /* Quand une note est affichée, les pastilles se collent juste dessous (sans espace vide). */
+  .card-note:not(:empty) + .badges { margin-top: 0; }
   .card-author {
     font-size: 12px;
     color: #666;
@@ -898,8 +902,10 @@
         (resume ? '<p class="resume">' + escapeHtml(resume) + '</p>' : '') +
         // Bloc "Avis des lecteurs" (texte saisi dans la colonne du Sheet), entre le résumé et la 4e de couverture.
         // Il n'apparaît que si la cellule du Sheet contient du texte.
-        (d.avisLecteurs ? '<p class="resume"><strong>🧐 Avis des lecteurs</strong><br>' + escapeHtml(d.avisLecteurs) + '</p>' : '') +
-        (d.resumeComplet ? '<p class="resume"><strong>4e de couverture :</strong><br>' + escapeHtml(d.resumeComplet) + '</p>' : '') +
+        // white-space:pre-line = retours à la ligne conservés ; richHtml = gras / couleurs du Sheet conservés.
+        (d.avisLecteurs ? '<p class="resume"><strong>🧐 Avis des lecteurs</strong><br><span style="white-space:pre-line">' + richHtml(d.avisRuns, d.avisLecteurs) + '</span></p>' : '') +
+        // white-space:pre-line = retours à la ligne conservés ; richHtml = gras / couleurs du Sheet conservés.
+        (d.resumeComplet ? '<p class="resume"><strong>4e de couverture :</strong><br><span style="white-space:pre-line">' + richHtml(d.resumeCompletRuns, d.resumeComplet) + '</span></p>' : '') +
         (!resume && !d.resumeComplet && !d.avisLecteurs ? '<p class="resume">Pas de résumé disponible.</p>' : '');
     } else {
       html =
@@ -1109,6 +1115,23 @@
     document.getElementById('overlay').classList.remove('open');
   }
  
+  // Reproduit la mise en forme saisie dans le Sheet (gras, italique, souligné, couleur).
+  // "runs" = morceaux de texte envoyés par Code.gs ; si absents, on affiche le texte simple.
+  // Chaque morceau est protégé par escapeHtml, et la couleur est vérifiée (format #rrggbb).
+  function richHtml(runs, texteSimple) {
+    if (!runs || !runs.length) return escapeHtml(texteSimple);
+    return runs.map(function(r) {
+      var s = escapeHtml(r.t);
+      if (!s) return '';
+      var style = '';
+      if (r.c && /^#[0-9a-fA-F]{6}$/.test(r.c)) style += 'color:' + r.c + ';';
+      if (r.b) style += 'font-weight:bold;';
+      if (r.i) style += 'font-style:italic;';
+      if (r.u) style += 'text-decoration:underline;';
+      return style ? '<span style="' + style + '">' + s + '</span>' : s;
+    }).join('');
+  }
+
   // Neutralise les caractères spéciaux d'un texte avant de l'afficher
   // (protection contre l'injection de code par un nom saisi).
   function escapeHtml(s) {
