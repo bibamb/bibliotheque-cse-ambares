@@ -287,6 +287,13 @@
     padding: 40px 0;
   }
  
+  /* Étoiles de notation (fiche détail) : grises par défaut, orange une fois choisies. */
+  .star-pick { font-size: 32px; line-height: 1; margin: 2px 0 8px; user-select: none; }
+  .star { color: #ccc; cursor: pointer; padding: 0 3px; }
+  .star.on { color: #f5a623; }
+  @media (hover: hover) { .star:hover { color: #f5a623; } }
+  .note-hint { font-size: 13px; color: #555; margin: 0 0 8px; }
+
   /* Zone de réservation (nom + bouton), en bas de la fiche détail. */
   .reserve-box {
     clear: both;
@@ -797,6 +804,7 @@
   // Mémoire des détails déjà chargés (évite de les redemander si on rouvre le même livre).
   var detailCache = {};
   var currentDetailIsbn = null;
+  var currentDetailBook = null;   // livre actuellement ouvert dans la fiche
 
   // Remplit éditeur/pages/date et résumés. d = détail complet (null tant qu'il charge).
   function fillDetail(b, d, failed) {
@@ -808,7 +816,9 @@
       extra.innerHTML =
         (d.editeur ? '<p class="meta"><strong>Éditeur :</strong> ' + escapeHtml(d.editeur) + '</p>' : '') +
         (d.datePublication ? '<p class="meta"><strong>Publication :</strong> ' + escapeHtml(d.datePublication) + '</p>' : '') +
-        (d.pages ? '<p class="meta"><strong>Pages :</strong> ' + escapeHtml(d.pages) + '</p>' : '');
+        (d.pages ? '<p class="meta"><strong>Pages :</strong> ' + escapeHtml(d.pages) + '</p>' : '') +
+        // NOUVEAU : note moyenne des lecteurs (lue dans les colonnes "Note moyenne" et "Nb votes" du Sheet)
+        '<p class="meta"><strong>Note des lecteurs :</strong> ' + texteNote(d.noteMoyenne, d.nbVotes) + '</p>';
       var resume = d.resume || b.resume;
       html =
         (resume ? '<p class="resume">' + escapeHtml(resume) + '</p>' : '') +
@@ -830,6 +840,7 @@
   // Ouvre la fiche détail d'un livre et décide si le bouton "Réserver" est proposé.
   function openDetail(b) {
     currentDetailIsbn = b.isbn;
+    currentDetailBook = b;
     detailPending = !statutsMap && !statutsFailed;
     document.getElementById('detailContent').innerHTML =
       '<img src="' + (b.jaquette || '') + '" alt="">' +
@@ -842,7 +853,11 @@
       '<div id="detailExtra"></div>' +
       '<p class="meta"><strong>Statut :</strong> <span id="detailStatut">' + escapeHtml(b.statut || (!statutsMap && !statutsFailed ? 'Chargement…' : '—')) + '</span></p>' +
       '<div id="detailResume"></div>' +
+      '<div id="noteZone"></div>' +
       '<div id="reserveZone"></div>';
+
+    // NOUVEAU : zone de vote (étoiles), sauf pour les livres pas encore disponibles à la lecture.
+    if (noteAutorisee(b.statut)) renderNoteZone();
 
     fillDetail(b, detailCache[b.isbn] || null);
 
@@ -912,6 +927,98 @@
       });
   }
  
+  // ===== NOTE DES LECTEURS (nouveau) =====
+
+  // Peut-on noter ce livre ? Non s'il est "Prochainement" ou "Wishlist" (pas encore lu par les lecteurs).
+  // Pour autoriser aussi ces statuts, remplacer la ligne "return" par : return true;
+  function noteAutorisee(statut) {
+    var s = (statut || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return s !== 'prochainement' && s !== 'wishlist';
+  }
+
+  // Texte de la note moyenne, ex. : ★ 4,3 / 5 (12 avis).  Sans vote : "Pas encore de note".
+  function texteNote(moyenne, nb) {
+    if (!nb) return '<span style="color:#999">Pas encore de note</span>';
+    return '<span style="color:#f5a623">★</span> ' + Number(moyenne).toFixed(1).replace('.', ',') +
+      ' / 5 (' + nb + ' avis' + ')';
+  }
+
+  // Affiche les 5 étoiles cliquables dans la fiche.
+  var noteChoisie = 0;
+  function renderNoteZone() {
+    noteChoisie = 0;
+    var etoiles = '';
+    for (var n = 1; n <= 5; n++) {
+      etoiles += '<span class="star" data-n="' + n + '" onclick="choisirNote(' + n + ')">★</span>';
+    }
+    document.getElementById('noteZone').innerHTML =
+      '<div class="reserve-box">' +
+        '<p class="reserve-title">Noter ce livre</p>' +
+        '<div class="star-pick" id="starPick">' + etoiles + '</div>' +
+        '<div id="noteForm"></div>' +
+        '<div id="noteStatus"></div>' +
+      '</div>';
+  }
+
+  // Un clic sur une étoile : on colore les étoiles jusqu'à celle-ci,
+  // puis on demande le nom avant de pouvoir envoyer.
+  function choisirNote(n) {
+    noteChoisie = n;
+    var etoiles = document.querySelectorAll('#starPick .star');
+    for (var i = 0; i < etoiles.length; i++) {
+      etoiles[i].classList.toggle('on', i < n);
+    }
+    var form = document.getElementById('noteForm');
+    if (!document.getElementById('noteNom')) {
+      form.innerHTML =
+        '<p class="note-hint" id="noteHint"></p>' +
+        '<input type="text" id="noteNom" placeholder="Votre nom">' +
+        '<button id="noteBtn" onclick="envoyerNote()">Envoyer ma note</button>';
+    }
+    document.getElementById('noteHint').textContent =
+      'Ta note : ' + n + ' / 5. Indique ton nom pour l\'envoyer (un seul vote par personne et par livre ; un nouveau vote remplace le précédent).';
+    document.getElementById('noteStatus').innerHTML = '';
+    document.getElementById('noteBtn').disabled = false;
+  }
+
+  // Envoie le vote à Code.gs, puis met à jour la note affichée.
+  function envoyerNote() {
+    var nom = document.getElementById('noteNom').value.trim();
+    var statusDiv = document.getElementById('noteStatus');
+    if (!nom) {
+      statusDiv.innerHTML = '<p class="reserve-msg err">Merci de renseigner ton nom.</p>';
+      return;
+    }
+    var isbn = currentDetailIsbn;
+    document.getElementById('noteBtn').disabled = true;
+    statusDiv.innerHTML = '<p class="reserve-msg warn">Envoi en cours...</p>';
+
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'note', isbn: isbn, nom: nom, note: noteChoisie })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.status === 'ok') {
+          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Merci ! ' +
+            (res.remplace ? 'Ta note précédente a été remplacée.' : 'Ta note a été enregistrée.') + '</p>';
+          // On met à jour la note affichée dans la fiche (sans recharger la page).
+          detailCache[isbn] = detailCache[isbn] || {};
+          detailCache[isbn].noteMoyenne = res.moyenne;
+          detailCache[isbn].nbVotes = res.nb;
+          if (currentDetailIsbn === isbn && currentDetailBook) fillDetail(currentDetailBook, detailCache[isbn]);
+        } else {
+          statusDiv.innerHTML = '<p class="reserve-msg err">❌ ' + (res.message || 'Erreur inconnue.') + '</p>';
+          document.getElementById('noteBtn').disabled = false;
+        }
+      })
+      .catch(function(err) {
+        statusDiv.innerHTML = '<p class="reserve-msg err">❌ Erreur réseau : ' + err.message + '</p>';
+        document.getElementById('noteBtn').disabled = false;
+      });
+  }
+
   // Ferme la fiche détail.
   function closeDetail() {
     document.getElementById('overlay').classList.remove('open');
