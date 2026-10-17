@@ -94,6 +94,64 @@
     background: white;
   }
  
+  /* NOUVEAU : liste Auteurs avec champ de recherche (remplace l'ancienne liste déroulante). */
+  .combo {
+    position: relative;
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+  .controls .combo input[type=text] {
+    flex: none;
+    width: 100%;
+    box-sizing: border-box;
+    padding-right: 30px;       /* place pour la croix */
+    background: white;
+  }
+  .combo-clear {
+    display: none;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: none;
+    color: #888;
+    font-size: 15px;
+    cursor: pointer;
+    padding: 4px 6px;
+  }
+  .combo-list {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 3px 0 0;
+    padding: 0;
+    list-style: none;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 15;
+  }
+  .combo.open .combo-list { display: block; }
+  .combo-list li {
+    padding: 8px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .combo-list li.active { background: #e8e0f5; }
+  .combo-list li.selected { font-weight: bold; }
+  .combo-list li.all { color: #666; border-bottom: 1px solid #eee; }
+  .combo-list li.empty { color: #888; cursor: default; font-style: italic; }
+  @media (hover: hover) { .combo-list li:not(.empty):hover { background: #e8e0f5; } }
+
   .count {
     font-size: 13px;
     color: #666;
@@ -433,7 +491,15 @@
   <input type="text" id="search" placeholder="Rechercher un titre ou un auteur...">
   <select id="filterType"><option value="">Tous les types</option></select>
   <select id="filterGenre"><option value="">Tous les genres</option></select>
-  <select id="filterAuteur"><option value="">Tous les auteurs</option></select>
+  <!-- NOUVEAU : liste Auteurs avec champ de recherche.
+       "filterAuteur" est maintenant un champ caché qui contient l'auteur choisi
+       (le reste du script le lit comme avant). -->
+  <div class="combo" id="authorCombo">
+    <input type="text" id="authorInput" placeholder="Tous les auteurs" autocomplete="off" aria-label="Filtrer par auteur">
+    <button type="button" class="combo-clear" id="authorClear" title="Effacer l'auteur">✕</button>
+    <input type="hidden" id="filterAuteur" value="">
+    <ul class="combo-list" id="authorList"></ul>
+  </div>
   <select id="filterStatut"><option value="">Tous les statuts</option></select>
   <!-- NOUVEAU : tri par note (les livres sans vote restent à la fin) -->
   <select id="sortBy"><option value="">Tri : ordre du catalogue</option><option value="note" selected>Tri : mieux notés</option></select>
@@ -724,16 +790,199 @@
     detailPending = false;
   }
 
+  // ==========================================================================
+  // NOUVEAU : OUTILS DE RECHERCHE (sans majuscules, sans accents, tolérante aux fautes)
+  // ==========================================================================
+
+  // Met un texte sous une forme "neutre" pour comparer : minuscules, sans accents
+  // (ä, é, ñ... deviennent a, e, n), ponctuation remplacée par des espaces.
+  // Exemple : "Läckberg, Camilla" devient "lackberg camilla".
+  function norm(s) {
+    return String(s || '').toLowerCase()
+      .replace(/œ/g, 'oe').replace(/æ/g, 'ae').replace(/ø/g, 'o').replace(/ł/g, 'l')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim();
+  }
+
+  // Trie une liste de textes en ignorant accents, majuscules et ponctuation :
+  // "Läckberg" se range donc avec les "Lac...", pas à la fin des L.
+  function sortFr(arr) {
+    return arr.sort(function(a, b) {
+      var ka = norm(a), kb = norm(b);
+      if (ka < kb) return -1;
+      if (ka > kb) return 1;
+      return a.localeCompare(b, 'fr');
+    });
+  }
+
+  // Nombre de lettres d'écart entre deux mots (distance de Levenshtein).
+  function editDistance(a, b) {
+    if (a === b) return 0;
+    var prev = [], cur = [], i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      cur[0] = i;
+      for (j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+      }
+      prev = cur.slice();
+    }
+    return prev[b.length];
+  }
+
+  // Un mot tapé correspond-il à l'un des mots d'un livre / d'un auteur ?
+  //  - mode normal : le mot tapé doit être contenu dans un mot ("lack" trouve "lackberg")
+  //  - mode "approché" (fuzzy) : on accepte en plus 1 faute (mot de 4 à 6 lettres)
+  //    ou 2 fautes (mot de 7 lettres et plus) : "lackbrg" ou "harry quebret" fonctionnent.
+  function tokenMatches(t, words, fuzzy) {
+    var tol = t.length <= 3 ? 0 : (t.length <= 6 ? 1 : 2);
+    for (var i = 0; i < words.length; i++) {
+      var w = words[i];
+      if (w.indexOf(t) !== -1) return true;
+      if (fuzzy && tol > 0 && w.length >= t.length - tol &&
+          editDistance(t, w.slice(0, t.length)) <= tol) return true;
+    }
+    return false;
+  }
+
+  // Tous les mots tapés (dans n'importe quel ordre) doivent être trouvés.
+  function allTokensMatch(tokens, words, fuzzy) {
+    for (var i = 0; i < tokens.length; i++) {
+      if (!tokenMatches(tokens[i], words, fuzzy)) return false;
+    }
+    return true;
+  }
+
+  // ==========================================================================
+  // NOUVEAU : LISTE AUTEURS AVEC CHAMP DE RECHERCHE
+  // ==========================================================================
+  var authorItems = [];     // [{name, words}] triés
+  var authorActive = -1;    // ligne surlignée au clavier
+
+  function setAuthors(names) {
+    authorItems = names.map(function(n) { return { name: n, words: norm(n).split(' ') }; });
+    if (document.getElementById('authorCombo').classList.contains('open')) buildAuthorList();
+  }
+
+  function buildAuthorList() {
+    var ul = document.getElementById('authorList');
+    var typed = document.getElementById('authorInput').value;
+    var current = document.getElementById('filterAuteur').value;
+    // Si le champ affiche juste l'auteur déjà choisi, on montre toute la liste.
+    var tokens = (typed === current) ? [] : norm(typed).split(' ').filter(Boolean);
+
+    var found = authorItems.filter(function(a) { return allTokensMatch(tokens, a.words, false); });
+    if (!found.length && tokens.length) {
+      found = authorItems.filter(function(a) { return allTokensMatch(tokens, a.words, true); });
+    }
+
+    ul.innerHTML = '';
+    authorActive = -1;
+    var frag = document.createDocumentFragment();
+    var all = document.createElement('li');
+    all.className = 'all';
+    all.textContent = 'Tous les auteurs';
+    all.dataset.value = '';
+    frag.appendChild(all);
+    found.forEach(function(a) {
+      var li = document.createElement('li');
+      li.textContent = a.name;
+      li.dataset.value = a.name;
+      if (a.name === current) li.className = 'selected';
+      frag.appendChild(li);
+    });
+    if (!found.length) {
+      var none = document.createElement('li');
+      none.className = 'empty';
+      none.textContent = 'Aucun auteur trouvé';
+      frag.appendChild(none);
+    }
+    ul.appendChild(frag);
+  }
+
+  function openAuthorList() {
+    document.getElementById('authorCombo').classList.add('open');
+    buildAuthorList();
+  }
+  function closeAuthorList() {
+    document.getElementById('authorCombo').classList.remove('open');
+  }
+
+  // Applique le choix (nom vide = tous les auteurs) puis rafraîchit la grille.
+  function chooseAuthor(name) {
+    var hidden = document.getElementById('filterAuteur');
+    var changed = hidden.value !== name;
+    hidden.value = name;
+    document.getElementById('authorInput').value = name;
+    document.getElementById('authorClear').style.display = name ? 'block' : 'none';
+    closeAuthorList();
+    if (changed) render();
+  }
+
+  function moveAuthorActive(delta) {
+    var items = document.querySelectorAll('#authorList li:not(.empty)');
+    if (!items.length) return;
+    if (authorActive > -1) items[authorActive].classList.remove('active');
+    authorActive = (authorActive + delta + items.length) % items.length;
+    items[authorActive].classList.add('active');
+    items[authorActive].scrollIntoView({ block: 'nearest' });
+  }
+
+  (function initAuthorCombo() {
+    var input = document.getElementById('authorInput');
+    var list  = document.getElementById('authorList');
+
+    input.addEventListener('focus', function() { input.select(); openAuthorList(); });
+    input.addEventListener('click', function() {
+      if (!document.getElementById('authorCombo').classList.contains('open')) openAuthorList();
+    });
+    input.addEventListener('input', function() {
+      document.getElementById('authorCombo').classList.add('open');
+      buildAuthorList();
+    });
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); openAuthorList(); moveAuthorActive(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); moveAuthorActive(-1); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        var items = document.querySelectorAll('#authorList li:not(.empty)');
+        var li = authorActive > -1 ? items[authorActive] : null;
+        // Sans sélection au clavier : on prend le 1er auteur trouvé (hors "Tous les auteurs")
+        if (!li && items.length > 1 && input.value.trim()) li = items[1];
+        if (li) chooseAuthor(li.dataset.value);
+      }
+      else if (e.key === 'Escape') { input.blur(); }
+    });
+    // On quitte le champ : texte vide = tous les auteurs, sinon on réaffiche l'auteur choisi.
+    input.addEventListener('blur', function() {
+      if (!input.value.trim()) chooseAuthor('');
+      else input.value = document.getElementById('filterAuteur').value;
+      closeAuthorList();
+    });
+    // mousedown (et pas click) pour agir avant que le champ perde le focus
+    list.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      var li = e.target.closest('li');
+      if (li && !li.classList.contains('empty')) chooseAuthor(li.dataset.value);
+    });
+    document.getElementById('authorClear').addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      chooseAuthor('');
+    });
+  })();
+
   // Remplit les listes de filtres (Type, Genre, Auteur, Statut) et les pastilles de tags.
   function populateFilters(books) {
-    var types   = [...new Set(books.map(function(b){return b.type;}).filter(Boolean))].sort();
-    var genres  = [...new Set(books.map(function(b){return b.genre;}).filter(Boolean))].sort();
-    var auteurs = [...new Set(books.map(function(b){return b.auteur;}).filter(Boolean))].sort();
-    var statuts = [...new Set(books.map(function(b){return b.statut;}).filter(Boolean))].sort();
+    // MODIFIÉ : tri "intelligent" (sortFr) qui ignore accents et majuscules
+    var types   = sortFr([...new Set(books.map(function(b){return b.type;}).filter(Boolean))]);
+    var genres  = sortFr([...new Set(books.map(function(b){return b.genre;}).filter(Boolean))]);
+    var auteurs = sortFr([...new Set(books.map(function(b){return b.auteur;}).filter(Boolean))]);
+    var statuts = sortFr([...new Set(books.map(function(b){return b.statut;}).filter(Boolean))]);
 
     fillSelect('filterType', types);
     fillSelect('filterGenre', genres);
-    fillSelect('filterAuteur', auteurs);
+    setAuthors(auteurs);   // MODIFIÉ : la liste Auteurs a maintenant son propre champ de recherche
     fillSelect('filterStatut', statuts);
 
     var allTags = new Set();
@@ -786,13 +1035,16 @@
  
   // Applique les filtres + la recherche, puis réaffiche la grille depuis le début.
   function render() {
-    var q = document.getElementById('search').value.trim().toLowerCase();
+    // MODIFIÉ : la recherche ignore majuscules/accents/ponctuation ; chaque mot tapé doit être trouvé
+    // (dans n'importe quel ordre). S'il n'y a AUCUN résultat exact, on relance une
+    // recherche "approchée" qui tolère 1 ou 2 fautes de frappe.
+    var qTokens = norm(document.getElementById('search').value).split(' ').filter(Boolean);
     var fType = document.getElementById('filterType').value;
     var fGenre = document.getElementById('filterGenre').value;
     var fAuteur = document.getElementById('filterAuteur').value;
     var fStatut = document.getElementById('filterStatut').value;
  
-    currentFiltered = allBooks.filter(function(b) {
+    function keep(b, fuzzy) {
       if (fType && b.type !== fType) return false;
       if (fGenre && b.genre !== fGenre) return false;
       if (fAuteur && b.auteur !== fAuteur) return false;
@@ -801,12 +1053,16 @@
         var bookTags = parseTags(b.tags);
         if (!bookTags.some(function(t) { return selectedTags.has(t); })) return false;
       }
-      if (q) {
-        var hay = (b.titre + ' ' + b.auteur).toLowerCase();
-        if (hay.indexOf(q) === -1) return false;
+      if (qTokens.length) {
+        if (!b._words) b._words = norm(b.titre + ' ' + b.auteur).split(' ');  // calculé une seule fois par livre
+        if (!allTokensMatch(qTokens, b._words, fuzzy)) return false;
       }
       return true;
-    });
+    }
+    currentFiltered = allBooks.filter(function(b) { return keep(b, false); });
+    if (!currentFiltered.length && qTokens.length) {
+      currentFiltered = allBooks.filter(function(b) { return keep(b, true); });
+    }
  
     // NOUVEAU : tri "mieux notés" = note moyenne décroissante, puis nombre de votes décroissant.
     // Les livres sans vote (note 0) restent à la fin, dans l'ordre du catalogue.
@@ -1146,7 +1402,7 @@
   document.getElementById('search').addEventListener('input', render);
   document.getElementById('filterType').addEventListener('change', render);
   document.getElementById('filterGenre').addEventListener('change', render);
-  document.getElementById('filterAuteur').addEventListener('change', render);
+  // (la liste Auteurs appelle render() elle-même quand on choisit un auteur)
   document.getElementById('filterStatut').addEventListener('change', render);
   document.getElementById('sortBy').addEventListener('change', render);
   document.getElementById('overlay').addEventListener('click', function(e) {
