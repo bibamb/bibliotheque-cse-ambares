@@ -727,11 +727,28 @@
     });
   }
 
-  // Texte affiché sous l'auteur : ★ 4,3 (12). Vide si le livre n'a pas de vote.
+  // NOUVEAU : ce livre a-t-il le tag "Coup de Coeur" ?
+  // On compare sans accents ni majuscules (et œ → oe), donc "💜 Coup de Coeur",
+  // "Coup de cœur" ou "coup de coeur" sont tous reconnus.
+  // Le résultat est mémorisé dans b._cdc pour ne pas refaire le calcul à chaque fois.
+  function estCoupDeCoeur(b) {
+    if (b._cdc === undefined) {
+      b._cdc = parseTags(b.tags).some(function(t) {
+        return t.toLowerCase().replace(/œ/g, 'oe')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .indexOf('coup de coeur') !== -1;
+      });
+    }
+    return b._cdc;
+  }
+
+  // Texte affiché sous l'auteur : ★ 4,3 (12) 💜. Vide si le livre n'a ni vote ni coup de coeur.
+  // NOUVEAU : le 💜 est ajouté à droite de la note pour les livres "Coup de Coeur".
   function noteCardHtml(b) {
-    if (!b.nbVotes) return '';
+    var coeur = estCoupDeCoeur(b) ? ' <span title="Coup de Coeur">💜</span>' : '';
+    if (!b.nbVotes) return coeur.trim();
     return '<span style="color:#f5a623">★</span> ' + Number(b.noteMoy).toFixed(1).replace('.', ',') +
-      ' <span style="color:#888">(' + b.nbVotes + ')</span>';
+      ' <span style="color:#888">(' + b.nbVotes + ')</span>' + coeur;
   }
 
   // Met à jour les notes sur les cartes déjà affichées, sans reconstruire la grille.
@@ -1064,11 +1081,17 @@
       currentFiltered = allBooks.filter(function(b) { return keep(b, true); });
     }
  
-    // NOUVEAU : tri "mieux notés" = note moyenne décroissante, puis nombre de votes décroissant.
-    // Les livres sans vote (note 0) restent à la fin, dans l'ordre du catalogue.
+    // NOUVEAU : tri "mieux notés" =
+    //   1) note moyenne décroissante,
+    //   2) puis nombre de votes décroissant,
+    //   3) à égalité parfaite, les livres "Coup de Coeur" passent en premier.
+    // Les livres sans vote (note 0, 0 vote) sont donc à la fin, mais leurs Coup de Coeur
+    // apparaissent avant les autres.
     if (document.getElementById('sortBy').value === 'note') {
       currentFiltered.sort(function(a, b) {
-        return ((b.noteMoy || 0) - (a.noteMoy || 0)) || ((b.nbVotes || 0) - (a.nbVotes || 0));
+        return ((b.noteMoy || 0) - (a.noteMoy || 0)) ||
+               ((b.nbVotes || 0) - (a.nbVotes || 0)) ||
+               ((estCoupDeCoeur(b) ? 1 : 0) - (estCoupDeCoeur(a) ? 1 : 0));
       });
     }
 
