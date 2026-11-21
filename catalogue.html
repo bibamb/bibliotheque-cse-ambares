@@ -1534,6 +1534,8 @@
   document.getElementById('contactOverlay').addEventListener('click', function(e) {
     if (e.target === this) closeContact();
   });
+  // Lien venant de la page "Infos pratiques" (catalogue.html#contact) : ouvre directement le formulaire.
+  if (location.hash === '#contact') openContact();
  
   // Affiche le bouton "↑" quand on a défilé de plus de 400 pixels.
   window.addEventListener('scroll', function() {

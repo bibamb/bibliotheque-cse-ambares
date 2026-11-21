@@ -82,6 +82,14 @@
     line-height: 1.6;
     white-space: pre-line;
   }
+  /* Lien "Nous contacter" (ouvre le formulaire de contact du catalogue). */
+  .contact-link {
+    color: #2f6fd6;
+    font-weight: bold;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .contact-link:hover { text-decoration: underline; }
   .empty {
     text-align: center;
     color: #888;
@@ -133,8 +141,9 @@
       }
       container.innerHTML = sections.map(function(s) {
         return '<div class="section-card"><h2>' + escapeHtml(s.titre) + '</h2>' +
-               '<div class="content">' + escapeHtml(s.contenu) + '</div></div>';
+               '<div class="content">' + richHtml(s.contenuRuns, s.contenu) + '</div></div>';
       }).join('');
+      lierNousContacter(container);
     })
     .catch(function(err) {
       document.getElementById('spinner').style.display = 'none';
@@ -142,6 +151,49 @@
         '<p class="empty">Erreur de chargement : ' + err.message + '</p>';
     });
  
+  // Reproduit la mise en forme saisie dans le Sheet (gras, italique, souligné, couleur).
+  // "runs" = morceaux de texte envoyés par Code.gs ; si absents, on affiche le texte simple.
+  function richHtml(runs, texteSimple) {
+    if (!runs || !runs.length) return escapeHtml(texteSimple);
+    return runs.map(function(r) {
+      var s = escapeHtml(r.t);
+      if (!s) return '';
+      var style = '';
+      if (r.c && /^#[0-9a-fA-F]{6}$/.test(r.c)) style += 'color:' + r.c + ';';
+      if (r.b) style += 'font-weight:bold;';
+      if (r.i) style += 'font-style:italic;';
+      if (r.u) style += 'text-decoration:underline;';
+      return style ? '<span style="' + style + '">' + s + '</span>' : s;
+    }).join('');
+  }
+
+  // Transforme chaque "Nous contacter" du texte en lien (avec son enveloppe) qui ouvre
+  // le formulaire de contact sur la page Catalogue, comme le lien de l'en-tête du catalogue.
+  function lierNousContacter(root) {
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    var noeuds = [];
+    while (walker.nextNode()) noeuds.push(walker.currentNode);
+    var enveloppe = /[\u2709\u{1F4E7}\u{1F4E8}\u{1F4E9}\u{1F4EB}]\uFE0F?\s*$/u;
+    noeuds.forEach(function(noeud, k) {
+      var texte = noeud.nodeValue;
+      var pos = texte.indexOf('Nous contacter');
+      if (pos === -1) return;
+      var avant = texte.slice(0, pos).replace(enveloppe, '');
+      // L'enveloppe peut se trouver dans le morceau de texte précédent (mise en forme différente)
+      if (!avant.trim() && k > 0) noeuds[k - 1].nodeValue = noeuds[k - 1].nodeValue.replace(enveloppe, '');
+      var apres = texte.slice(pos + 'Nous contacter'.length);
+      var lien = document.createElement('a');
+      lien.className = 'contact-link';
+      lien.href = 'catalogue.html#contact';
+      lien.textContent = '\u2709\uFE0F Nous contacter';
+      var frag = document.createDocumentFragment();
+      frag.appendChild(document.createTextNode(avant));
+      frag.appendChild(lien);
+      frag.appendChild(document.createTextNode(apres));
+      noeud.parentNode.replaceChild(frag, noeud);
+    });
+  }
+
   function escapeHtml(s) {
     return String(s || '').replace(/[&<>"']/g, function(c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
