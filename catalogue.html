@@ -54,27 +54,6 @@
   header {
     padding: 20px 0 10px;
   }
-  /* Lien "Nous contacter" (enveloppe + texte) : ouvre le formulaire de contact. */
-  .contact-link {
-    margin-left: 14px;
-    font-size: 13px;
-    color: #609ffc;
-    font-weight: bold;
-    text-decoration: none;
-  }
-  .contact-link:hover { text-decoration: underline; }
-  /* Formulaire de contact : liste déroulante "Objet" et champ anti-robot invisible. */
-  .reserve-box select {
-    width: 100%;
-    padding: 8px 10px;
-    margin-bottom: 8px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 14px;
-    background: white;
-  }
-  .contact-label { display: block; font-size: 13px; color: #555; margin: 0 0 3px; }
-  .hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
   h1 {
     font-size: 22px;
     color: var(--card);
@@ -488,7 +467,6 @@
   <div class="subtitle" id="counter"></div>
   <div style="margin-top:8px">
     <a href="infos.html" style="font-size:13px;color:#609ffc;font-weight:bold;text-decoration:none">ℹ️ Infos pratiques</a>
-    <a href="#" class="contact-link" onclick="openContact(); return false;" title="Écrire à la Bibliothèque">✉️ Nous contacter</a>
   </div>
   <div id="spinner">
     <div style="display:flex;align-items:center;gap:12px">
@@ -544,35 +522,6 @@
   <div class="detail">
     <button class="close" onclick="closeDetail()">×</button>
     <div id="detailContent"></div>
-  </div>
-</div>
-
-<!-- Formulaire de contact (caché tant qu'on ne clique pas sur "Nous contacter").
-     Pour changer les choix de la liste "Objet", modifiez simplement les <option> ci-dessous. -->
-<div class="overlay" id="contactOverlay">
-  <div class="detail">
-    <button class="close" onclick="closeContact()">×</button>
-    <h2>✉️ Nous contacter</h2>
-    <p class="meta">Votre message sera transmis à l'équipe de la Bibliothèque.</p>
-    <div class="reserve-box" style="border-top:none;margin-top:6px;padding-top:0">
-      <label class="contact-label" for="ctObjet">Objet *</label>
-      <select id="ctObjet">
-        <option value="">— Choisir un objet —</option>
-        <option>J'ai une question sur les réservations/emprunts/retours</option>
-        <option>Je souhaite faire un Don de livres coups de coeur à la Section Bibliothèque</option>
-        <option>Je souhaite participer à la vie de la Section Bibliothèque</option>
-        <option>J'ai une autre question...</option>
-      </select>
-      <label class="contact-label" for="ctNom">Votre nom *</label>
-      <input type="text" id="ctNom" maxlength="80" placeholder="Prénom Nom">
-      <label class="contact-label" for="ctEmail">Votre email (facultatif, pour que nous puissions vous répondre)</label>
-      <input type="email" id="ctEmail" maxlength="120" placeholder="prenom.nom@exemple.fr">
-      <label class="contact-label" for="ctMessage">Votre message *</label>
-      <textarea id="ctMessage" maxlength="2000" placeholder="Écrivez votre message ici..."></textarea>
-      <input type="text" id="ctSite" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
-      <button id="ctBtn" onclick="envoyerContact()">Envoyer</button>
-      <div id="ctStatus"></div>
-    </div>
   </div>
 </div>
  
@@ -1441,55 +1390,6 @@
       });
   }
 
-  // ===== FORMULAIRE "NOUS CONTACTER" =====
-  // Ouvre la fenêtre du formulaire.
-  function openContact() {
-    document.getElementById('ctStatus').innerHTML = '';
-    document.getElementById('ctBtn').disabled = false;
-    document.getElementById('contactOverlay').classList.add('open');
-  }
-  function closeContact() {
-    document.getElementById('contactOverlay').classList.remove('open');
-  }
-
-  // Envoie le message à Code.gs (action "contact"), qui le transmet par email à la Bibliothèque.
-  function envoyerContact() {
-    var objet = document.getElementById('ctObjet').value;
-    var nom = document.getElementById('ctNom').value.trim();
-    var email = document.getElementById('ctEmail').value.trim();
-    var message = document.getElementById('ctMessage').value.trim();
-    var statusDiv = document.getElementById('ctStatus');
-
-    if (!objet || !nom || !message) {
-      statusDiv.innerHTML = '<p class="reserve-msg err">Merci de choisir un objet et de renseigner votre nom et votre message.</p>';
-      return;
-    }
-    document.getElementById('ctBtn').disabled = true;
-    statusDiv.innerHTML = '<p class="reserve-msg warn">Envoi en cours...</p>';
-
-    fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'contact', objet: objet, nom: nom, email: email,
-                             message: message, site: document.getElementById('ctSite').value })
-    })
-      .then(function(r) { return r.json(); })
-      .then(function(res) {
-        if (res.status === 'ok') {
-          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Merci ! Votre message a bien été envoyé. L'équipe de la Bibliothèque vous répondra dès que possible.</p>';
-          document.getElementById('ctObjet').value = '';
-          document.getElementById('ctMessage').value = '';
-        } else {
-          statusDiv.innerHTML = '<p class="reserve-msg err">❌ ' + (res.message || 'Erreur inconnue.') + '</p>';
-          document.getElementById('ctBtn').disabled = false;
-        }
-      })
-      .catch(function(err) {
-        statusDiv.innerHTML = '<p class="reserve-msg err">❌ Erreur réseau : ' + err.message + '</p>';
-        document.getElementById('ctBtn').disabled = false;
-      });
-  }
-
   // Ferme la fiche détail.
   function closeDetail() {
     document.getElementById('overlay').classList.remove('open');
@@ -1530,9 +1430,6 @@
   document.getElementById('sortBy').addEventListener('change', render);
   document.getElementById('overlay').addEventListener('click', function(e) {
     if (e.target === this) closeDetail();
-  });
-  document.getElementById('contactOverlay').addEventListener('click', function(e) {
-    if (e.target === this) closeContact();
   });
  
   // Affiche le bouton "↑" quand on a défilé de plus de 400 pixels.
