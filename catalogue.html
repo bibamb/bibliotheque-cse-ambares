@@ -1476,7 +1476,7 @@
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.status === 'ok') {
-          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Merci ! Votre message a bien été envoyé.</p>';
+          statusDiv.innerHTML = '<p class="reserve-msg ok">✅ Merci ! Votre message a bien été envoyé. L'équipe de la Bibliothèque vous répondra dès que possible.</p>';
           document.getElementById('ctObjet').value = '';
           document.getElementById('ctMessage').value = '';
         } else {
